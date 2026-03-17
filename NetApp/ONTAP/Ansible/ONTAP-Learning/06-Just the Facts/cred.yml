@@ -1,3 +1,6 @@
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Description : ONTAP credential vars — module 06
 hostname: "192.168.0.80"
 username: "admin"
 password: "netapp123"

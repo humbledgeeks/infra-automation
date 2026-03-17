@@ -1,0 +1,80 @@
+---
+# =============================================================================
+# Playbook : sg-gather-grid-info.yml
+# Description : Authenticates to the StorageGRID Admin Node REST API and
+#               gathers grid node health, tenant count, and alert status.
+#               Read-only — no changes made to the environment.
+# Author  : humbledgeeks-allen
+# Date    : 2026-03-16
+# Version : 1.0
+# API     : StorageGRID REST API v3 (uri module)
+# Repo    : infra-automation/NetApp/StorageGRID/Ansible
+# Usage   : ansible-playbook sg-gather-grid-info.yml --ask-vault-pass
+# =============================================================================
+
+- name: StorageGRID - Gather Grid Info
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    sg_admin_node: "{{ vault_sg_admin_node }}"
+    sg_username:   "{{ vault_sg_username }}"
+    sg_password:   "{{ vault_sg_password }}"
+    sg_api_base:   "https://{{ sg_admin_node }}/api/v3"
+
+  tasks:
+
+    - name: Authenticate to StorageGRID API
+      uri:
+        url: "{{ sg_api_base }}/authorize"
+        method: POST
+        body_format: json
+        body:
+          username:  "{{ sg_username }}"
+          password:  "{{ sg_password }}"
+          cookie:    false
+          csrfToken: false
+        validate_certs: false
+        status_code: 200
+      register: sg_auth
+      no_log: true   # Prevent credentials appearing in logs
+
+    - name: Set auth token
+      set_fact:
+        sg_token: "{{ sg_auth.json.data }}"
+        sg_headers:
+          Authorization: "Bearer {{ sg_auth.json.data }}"
+
+    - name: Gather grid node health
+      uri:
+        url: "{{ sg_api_base }}/grid/nodes"
+        headers: "{{ sg_headers }}"
+        validate_certs: false
+      register: sg_nodes
+
+    - name: Display node summary
+      debug:
+        msg: "Node: {{ item.name }} | Type: {{ item.type }} | State: {{ item.state }}"
+      loop: "{{ sg_nodes.json.data }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Gather tenant accounts
+      uri:
+        url: "{{ sg_api_base }}/grid/accounts"
+        headers: "{{ sg_headers }}"
+        validate_certs: false
+      register: sg_tenants
+
+    - name: Display tenant count
+      debug:
+        msg: "Total tenant accounts: {{ sg_tenants.json.data | length }}"
+
+    - name: Validate - confirm grid data was returned
+      assert:
+        that:
+          - sg_nodes.json.data is defined
+          - sg_nodes.json.data | length > 0
+        success_msg: "StorageGRID grid info gathered successfully from {{ sg_admin_node }}"
+        fail_msg: "No nodes returned — check connectivity to {{ sg_admin_node }}"

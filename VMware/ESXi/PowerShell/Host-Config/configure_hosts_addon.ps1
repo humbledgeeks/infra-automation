@@ -1,4 +1,22 @@
-﻿#====================================================================================================================
+﻿<#
+.SYNOPSIS
+    CSV-driven ESXi host configuration add-on: applies NTP, DNS, security hardening, NFS, and networking to all hosts.
+.DESCRIPTION
+    Companion to configure_hosts.ps1. Reads configure_lab_hosts.csv and iterates all hosts applying the same
+    full configuration set: NTP, DNS, security hardening, NFS best-practice settings, vSwitch port groups,
+    NFS datastore mount, and scratch location. Intended for applying configuration to additional or remaining hosts
+    after initial first-host setup.
+.NOTES
+    Author  : HumbledGeeks
+    Date    : 2023-06-05
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Prereq  : configure_lab_hosts.csv in the same directory as this script
+    Repo    : infra-automation/VMware/ESXi/PowerShell/Host-Config
+    WARNING : Contains hardcoded ESXi credentials (hostpass). Replace with Get-Credential before production use.
+              Run /script-migrate on this file to update to repo credential standards.
+#>
+#====================================================================================================================
 # 
 # AUTHOR: HumbledGeeks  
 # DATE  : 06/05/2023

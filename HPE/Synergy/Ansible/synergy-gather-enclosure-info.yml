@@ -1,0 +1,107 @@
+---
+# =============================================================================
+# Playbook : synergy-gather-enclosure-info.yml
+# Description : Connects to HPE OneView and gathers a read-only inventory of
+#               enclosures, server hardware (compute modules), and server
+#               profile compliance using the hpe.oneview collection.
+#               Read-only — no changes made to the environment.
+# Author  : humbledgeeks-allen
+# Date    : 2026-03-16
+# Version : 1.0
+# Collection : hpe.oneview
+# Repo    : infra-automation/HPE/Synergy/Ansible
+# Usage   : ansible-playbook synergy-gather-enclosure-info.yml --ask-vault-pass
+# =============================================================================
+
+- name: HPE Synergy - Gather Enclosure and Server Info
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    oneview_host:        "{{ vault_ov_hostname }}"
+    oneview_username:    "{{ vault_ov_username }}"
+    oneview_password:    "{{ vault_ov_password }}"
+    oneview_api_version: 4000
+    oneview_ssl_verify:  false   # Set true in production with valid certs
+
+  tasks:
+
+    - name: Gather HPE OneView enclosure facts
+      hpe.oneview.oneview_enclosure_facts:
+        config:
+          ip:       "{{ oneview_host }}"
+          credentials:
+            userName: "{{ oneview_username }}"
+            password:  "{{ oneview_password }}"
+          api_version: "{{ oneview_api_version }}"
+      register: enclosure_facts
+      no_log: true
+
+    - name: Display enclosure health summary
+      debug:
+        msg: "Enclosure: {{ item.name }} | Status: {{ item.status }} | State: {{ item.state }}"
+      loop: "{{ enclosure_facts.ansible_facts.enclosures }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Gather HPE OneView server hardware facts
+      hpe.oneview.oneview_server_hardware_facts:
+        config:
+          ip:       "{{ oneview_host }}"
+          credentials:
+            userName: "{{ oneview_username }}"
+            password:  "{{ oneview_password }}"
+          api_version: "{{ oneview_api_version }}"
+      register: server_facts
+      no_log: true
+
+    - name: Display server hardware summary
+      debug:
+        msg: >-
+          Server: {{ item.name }}
+          | Model: {{ item.model | default('N/A') }}
+          | Power: {{ item.powerState }}
+          | Status: {{ item.status }}
+      loop: "{{ server_facts.ansible_facts.server_hardwares }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Gather HPE OneView server profile facts
+      hpe.oneview.oneview_server_profile_facts:
+        config:
+          ip:       "{{ oneview_host }}"
+          credentials:
+            userName: "{{ oneview_username }}"
+            password:  "{{ oneview_password }}"
+          api_version: "{{ oneview_api_version }}"
+      register: profile_facts
+      no_log: true
+
+    - name: Display server profile compliance
+      debug:
+        msg: >-
+          Profile: {{ item.name }}
+          | Status: {{ item.status }}
+          | Compliance: {{ item.templateCompliance | default('No Template') }}
+      loop: "{{ profile_facts.ansible_facts.server_profiles }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Count non-compliant profiles
+      set_fact:
+        non_compliant: "{{ profile_facts.ansible_facts.server_profiles | selectattr('templateCompliance', 'defined') | selectattr('templateCompliance', 'equalto', 'NonCompliant') | list | length }}"
+
+    - name: Validate - confirm inventory was returned
+      assert:
+        that:
+          - enclosure_facts.ansible_facts.enclosures is defined
+          - server_facts.ansible_facts.server_hardwares is defined
+          - non_compliant | int == 0
+        success_msg: >-
+          OneView inventory gathered from {{ oneview_host }} —
+          {{ enclosure_facts.ansible_facts.enclosures | length }} enclosures,
+          {{ server_facts.ansible_facts.server_hardwares | length }} compute modules,
+          all profiles compliant
+        fail_msg: >-
+          WARNING: {{ non_compliant }} non-compliant server profile(s) found on {{ oneview_host }}

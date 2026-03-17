@@ -1,3 +1,38 @@
+<#
+.SYNOPSIS
+    Applies recommended VMware security hardening advanced settings to ESXi hosts.
+.DESCRIPTION
+    Reads a list of ESXi hosts from C:\ESXi_Hardening\hosts.csv, connects to each
+    host, and applies recommended security advanced settings including:
+      Config.HostAgent.log.level, Config.HostAgent.plugins.solo.enableMob,
+      Mem.ShareForceSalting, Security.AccountLockFailures,
+      Security.AccountUnlockTime, Security.PasswordHistory,
+      UserVars.DcuiTimeOut, UserVars.ESXiShellInteractiveTimeOut,
+      UserVars.ESXiShellTimeOut, UserVars.ESXiVPsDisabledProtocols,
+      VMkernel.Boot.execInstalledOnly, Misc.BlueScreenTimeout
+    Produces three timestamped output files per run in C:\ESXi_Hardening\:
+      - ESXi_AdvancedSettings_Changes_<ts>.csv   : settings modified
+      - ESXi_AdvancedSettings_Baseline_<ts>.csv  : pre-change values snapshot
+      - ESXi_AdvancedSettings_Log_<ts>.txt        : human-readable run log
+    Color output: Yellow = changed, Green = compliant, Red = error.
+    For production use, prefer ESXi_Hardening_V6h.ps1 which adds dry-run
+    mode, KPI dashboard, themed UI, and per-setting override capability.
+.PARAMETER None
+    No parameters. Host list is driven by C:\ESXi_Hardening\hosts.csv.
+    CSV must contain a column named "HostName".
+.EXAMPLE
+    .\ESXi_Hardening_Verbose.ps1
+.NOTES
+    Author  : humbledgeeks-allen
+    Date    : 2026-03-16
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/ESXi/PowerShell/Hardening
+    Prereq  : PowerCLI installed; C:\ESXi_Hardening\hosts.csv present with
+              a "HostName" column. Prompts for credentials once at runtime.
+    See also: ESXi_Hardening_V6h.ps1 (recommended for new deployments)
+#>
+
 #====================================================================================================================
 #  Apply Recommended Advanced Settings to ESXi Hosts
 #  Yellow = changed, Green = compliant, Red = error

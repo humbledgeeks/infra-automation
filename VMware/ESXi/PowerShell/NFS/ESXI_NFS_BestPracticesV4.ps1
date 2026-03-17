@@ -1,5 +1,20 @@
+<#
+.SYNOPSIS
+    Apply NetApp NFS best-practice advanced settings to ESXi hosts with dry-run and HTML report.
+.DESCRIPTION
+    Connects to vCenter, standalone ESXi hosts, or a CSV list and applies 11 recommended NFS advanced settings
+    including Net.TcpipHeapSize, NFS.MaxVolumes, NFS41.MaxVolumes, NFS.MaxQueueDepth, SunRPC.MaxConnPerIP,
+    and Disk.QFullSampleSize/Threshold. Supports dry-run mode and generates an HTML change summary report.
+.NOTES
+    Author  : HumbledGeeks / Allen Johnson
+    Date    : 2023-06-05
+    Version : V4
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/ESXi/PowerShell/NFS
+    Warning : Makes configuration changes to ESXi hosts. Always run dry-run first.
+#>
 #====================================================================================================================
-#  AUTHOR: HumbledGeeks / Allen Johnson / Modified by ChatGPT for Allen Johnson
+#  AUTHOR: HumbledGeeks / Allen Johnson
 #  PURPOSE: Apply NFS Best Practice Advanced Settings to ESXi Hosts with Interactivity, Dry-Run, HTML Report, and Emojis
 #====================================================================================================================
 

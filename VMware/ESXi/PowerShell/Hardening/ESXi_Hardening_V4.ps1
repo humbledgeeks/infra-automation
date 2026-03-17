@@ -1,5 +1,21 @@
+<#
+.SYNOPSIS
+    Apply recommended security hardening advanced settings to ESXi hosts with interactive menu, dry-run, and HTML report.
+.DESCRIPTION
+    Connects to vCenter, standalone ESXi hosts, or a CSV list and applies 14 recommended VMware security advanced
+    settings including account lockout, password policy, shell timeouts, and boot integrity enforcement.
+    Supports dry-run mode, color-coded console output, and an HTML change summary report.
+.NOTES
+    Author  : HumbledGeeks / Allen Johnson
+    Date    : 2023-06-05
+    Version : V4
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/ESXi/PowerShell/Hardening
+    See     : ESXi_Hardening_V6h.ps1 for current recommended version with verify+fallback logic.
+    Warning : Makes configuration changes to ESXi hosts. Always run dry-run first.
+#>
 #====================================================================================================================
-#  AUTHOR: HumbledGeeks / Allen Johnson / Modified by ChatGPT for Allen Johnson
+#  AUTHOR: HumbledGeeks / Allen Johnson
 #  PURPOSE: Apply Recommended Advanced Settings to ESXi Hosts with Menu, Dry Run, Color Output, HTML Summary, and Emojis
 #====================================================================================================================
 

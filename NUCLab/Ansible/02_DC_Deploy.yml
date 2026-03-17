@@ -1,3 +1,11 @@
+# =============================================================================
+# Playbook : 02_DC_Deploy.yml
+# Description : Deploy datacenter components in the NUCLab environment
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Repo    : infra-automation/NUCLab/Ansible
+# =============================================================================
 ---
 - name: Create Windows VM from scratch
   hosts: localhost

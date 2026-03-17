@@ -22,4 +22,8 @@ Sequential playbooks that build a full lab from scratch:
 | `05_Integration.yml` | Integrate all components |
 | `06_Portal.yml` | Portal/dashboard setup |
 
-See [Ansible/README.md](./Ansible/README.md) for full details.
+See [Ansible/README.md](./Ansible/README.md) for full details, vault setup, and run commands.
+
+## Related Agent
+
+Use `/infra-orchestrate` in Claude Code for multi-vendor lab build workflows spanning VMware, NetApp, and Active Directory. Use `/vmware-sme` or `/netapp-sme` for vendor-specific tasks within the lab.

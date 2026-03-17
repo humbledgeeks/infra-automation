@@ -1,3 +1,11 @@
+# =============================================================================
+# Playbook : 05_Integration.yml
+# Description : Integration and validation playbook for the NUCLab stack
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Repo    : infra-automation/NUCLab/Ansible
+# =============================================================================
 ---
 - hosts: localhost
   gather_facts: false

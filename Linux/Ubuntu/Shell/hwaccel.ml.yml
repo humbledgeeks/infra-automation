@@ -1,3 +1,6 @@
+# Author  : humbledgeeks-allen
+# Date    : 2024-01-01
+# Purpose : Hardware acceleration ML stack docker-compose configuration
 # Configurations for hardware-accelerated machine learning
 
 # If using Unraid or another platform that doesn't allow multiple Compose files,

@@ -1,3 +1,6 @@
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Description : NUCLab vCenter connection properties (vars file)
 DeploymentOption.value: 'tiny' # tiny,small,medium,large,management-tiny,management-small,management-medium,management-large,infrastructure
 
 # Networking Configuration

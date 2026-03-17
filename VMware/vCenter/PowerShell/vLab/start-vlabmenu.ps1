@@ -1,3 +1,30 @@
+<#
+.SYNOPSIS
+    Launches the interactive vLab Automation Kit menu system.
+.DESCRIPTION
+    Provides a full-screen text-based menu interface for managing virtual labs.
+    Main menu options:
+      1. vLab Catalog   — browse available lab templates, view details, provision clones
+      2. vLab Instances — list running labs, start/stop/destroy, launch RDP console
+      3. Admin Menu     — manage configuration settings and stored credentials
+    Lab operations use the vLab helper scripts (get-vlabs.ps1, new-vlabclone.ps1,
+    remove-vlab.ps1, show-vlabcatalog.ps1, etc.) from the same directory.
+    ONTAP snapshot operations (catalog release dates) use NetApp PowerShell Toolkit
+    cmdlets (Get-NcVol, Get-NcSnapshot).
+.EXAMPLE
+    .\start-vlabmenu.ps1
+.NOTES
+    Author  : humbledgeeks-allen
+    Date    : 2026-03-16
+    Version : 1.0
+    Module  : VMware.PowerCLI, NetApp.ONTAP (via helper scripts)
+    Repo    : infra-automation/VMware/vCenter/PowerShell/vLab
+    Prereq  : Run set-vlabcreds.ps1 once before first use to store credentials.
+              All vLab helper scripts must exist in the same directory.
+              Requires an active vCenter connection established by
+              Connect-vLabResources.ps1 (called via get-vlabsession.ps1).
+#>
+
 $CURRENTVLAB=""
 
 # Write-Header
@@ -7,7 +34,7 @@ function write-header {
 		$border="--------------------------------------------------------------------------------------------------------------------"
 		$txtbox="                                                                                             | vLAB Automation Kit |"
 		$txtright=$txtbox.substring(($msg.length +1))
-		
+
 		cls
 		Write-Host $border
 		write-host " $msg$txtright"
@@ -19,14 +46,14 @@ function menuMain {
     do {
 	    Write-Header "Main Menu"
 	    #          #1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
-    	Write-Host 
+    	Write-Host
 	    Write-Host "1. vLab Catalog"
 	    Write-Host "2. vLab Instances"
 	    Write-Host "3. Admin Menu"
 	    Write-Host "X. Exit"
 	    Write-Host
 	    $input = Read-Host "::>"
-	
+
 	    switch ($input) {
 	    	'1' { menu1vLabCatalog }
 	    	'2' { menu2vLabInstances }
@@ -34,7 +61,7 @@ function menuMain {
 	    	'x' { exit }
 	    }
 	    #pause
-    } until ($input -eq 'q')	
+    } until ($input -eq 'q')
 }
 
 # vLab Catalog
@@ -53,17 +80,17 @@ function menu1vLabCatalog {
 
 		if     ( "$selection" -eq "b" ) { $done=$true }
 		elseif ( "$selection" -eq "m" ) { menuMain }
-		elseif ( "$selection" -eq "r" ) { $vlabCatalog=.\show-vlabcatalog.ps1 }	
+		elseif ( "$selection" -eq "r" ) { $vlabCatalog=.\show-vlabcatalog.ps1 }
 		else {
 			$result=.\get-vlabcatalog.ps1 | where { $_.Name -eq "$selection" }
-			if ( !$result ) { 
-				write-host "Lab "$selection" not found." 
-				sleep 2 
+			if ( !$result ) {
+				write-host "Lab "$selection" not found."
+				sleep 2
 			}
-			else { 
+			else {
 				$CURRENTVLAB="$selection"
-				menu4vLabCatalogDetail 
-				$vlabcatalog=.\show-vlabcatalog.ps1 
+				menu4vLabCatalogDetail
+				$vlabcatalog=.\show-vlabcatalog.ps1
 			}
 		}
 	} until ( $done )
@@ -87,21 +114,21 @@ function menu2vLabInstances {
 		elseif ( "$selection" -eq "r" ) { $vlabList=.\show-vlabs.ps1 }
 		else {
 			$result=.\get-vlabs.ps1 | where { $_.Name -eq "$selection" }
-			if ( !$result ) { 
-				write-host "Lab "$selection" not found." 
+			if ( !$result ) {
+				write-host "Lab "$selection" not found."
 				sleep 2 }
-			else { 
+			else {
 				$CURRENTVLAB="$selection"
-				menu3vLabDetail 
+				menu3vLabDetail
 				$vlabList=.\show-vlabs.ps1 }
 		}
 	} until ( $done )
 }
 
-# vLab Instance 
-function menu3vLabDetail {  
+# vLab Instance
+function menu3vLabDetail {
 	$done=$false
-	do { 	
+	do {
 		$wanip=$(get-vapp "$CURRENTVLAB" | get-vm | where { $_.Name -eq "gateway" }).guest.IPAddress[0]
 		cls
 		#          #12345678901234567890123456789012345678901234567890123456789012345678901234567890
@@ -110,10 +137,10 @@ function menu3vLabDetail {
 		Write-Host "--------------------------------------------------------------------------------"
 		Write-Host
 		Write-Host "vLAB: $CURRENTVLAB"
-		Write-Host "IP  : $wanip"  
-		Write-Host 
+		Write-Host "IP  : $wanip"
+		Write-Host
 		Write-Host "Virtual Machines:"
-		get-vapp | where { $_.Name -eq "$CURRENTVLAB" } | get-vm | sort Name | format-table 
+		get-vapp | where { $_.Name -eq "$CURRENTVLAB" } | get-vm | sort Name | format-table
 		Write-Host "--------------------------------------------------------------------------------"
 		Write-Host " [L]Launch            | [S]tart [U]Shutdown [K]ill [D]estroy | [R]efresh [B]ack "
 		Write-Host "--------------------------------------------------------------------------------"
@@ -121,13 +148,13 @@ function menu3vLabDetail {
 		if     ( "$selection" -eq "b" ) { $done=$true }
 		elseif ( "$selection" -eq "r" ) { $done=$false }
 		elseif ( "$selection" -eq "m" ) { menuMain }
-		elseif ( "$selection" -eq "s" ) { get-vapp "$CURRENTVLAB" | get-vm | start-vm }	
-		elseif ( "$selection" -eq "k" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vm }	
+		elseif ( "$selection" -eq "s" ) { get-vapp "$CURRENTVLAB" | get-vm | start-vm }
+		elseif ( "$selection" -eq "k" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vm }
 		elseif ( "$selection" -eq "u" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vmguest }
-		elseif ( "$selection" -eq "l" ) { 
+		elseif ( "$selection" -eq "l" ) {
 			if ( $wanip ) { mstsc /v:"$wanip" /admin /f }
-		}	
-		elseif ( "$selection" -eq "d" ) {	
+		}
+		elseif ( "$selection" -eq "d" ) {
 			$areusure = Read-Host "Type DESTROY to destroy vLab $CURRENTVLAB"
 			if ( "$areusure" -eq "DESTROY" ) {
 				get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vm
@@ -140,25 +167,24 @@ function menu3vLabDetail {
 }
 
 # vLab Catalog Item
-function menu4vLabCatalogDetail {  
+function menu4vLabCatalogDetail {
 	$done=$false
-	do { 
+	do {
 		$wanip=""
 		$reldate=""
 		$gateway=get-vapp "$CURRENTVLAB" | get-vm | where { $_.Name -eq "gateway" }
 		if ( $gateway ) { $wanip=$gateway.guest.IPAddress[0] }
-		#$wanip=$(get-vapp "$CURRENTVLAB" | get-vm | where { $_.Name -eq "gateway" }).guest.IPAddress[0]
 		$relsnap=get-ncvol | where { $_.Name -eq "$CURRENTVLAB" } | get-ncsnapshot | where { $_.Name -eq "master" }
 		if ( $relsnap ) { $reldate=$relsnap.Created }
 		else { $reldate = "NOT RELEASED" }
-		
+
 		Write-header "vLab Catalog Item"
 		#          #12345678901234567890123456789012345678901234567890123456789012345678901234567890
 		Write-Host
 		Write-Host "vLAB    : $CURRENTVLAB"
 		Write-Host "Released: $reldate"
-		Write-Host "IP      : $wanip"  
-		Write-Host 
+		Write-Host "IP      : $wanip"
+		Write-Host
 		Write-Host "Virtual Machines:"
 		get-vapp | where { $_.Name -eq "$CURRENTVLAB" } | get-vm | sort Name | format-table
 		Write-Host "--------------------------------------------------------------------------------"
@@ -169,19 +195,19 @@ function menu4vLabCatalogDetail {
 		elseif ( "$selection" -eq "r" ) { $done=$false }
 		elseif ( "$selection" -eq "m" ) { menuMain }
 		elseif ( "$selection" -eq "a" ) { menu4vLabCatalogDetailAdmin }
-		elseif ( "$selection" -eq "s" ) { get-vapp "$CURRENTVLAB" | get-vm | start-vm }	
-		elseif ( "$selection" -eq "k" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vm }	
+		elseif ( "$selection" -eq "s" ) { get-vapp "$CURRENTVLAB" | get-vm | start-vm }
+		elseif ( "$selection" -eq "k" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vm }
 		elseif ( "$selection" -eq "u" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vmguest }
-		elseif ( "$selection" -eq "l" ) { 
+		elseif ( "$selection" -eq "l" ) {
 			if ( $wanip ) { mstsc /v:"$wanip" /admin /f }
-		}	
-		elseif ( "$selection" -eq "p" ) {	
+		}
+		elseif ( "$selection" -eq "p" ) {
 			Write-Header "Provisioning..."
 			Write-Host
 			Write-Host
 			Write-Host
 			Write-Host
-			$result=.\new-vlabclone.ps1 $CURRENTVLAB 
+			$result=.\new-vlabclone.ps1 $CURRENTVLAB
 			$CURRENTVLAB=$result.Name
 			menu3vLabDetail
 			$done=$true
@@ -190,53 +216,52 @@ function menu4vLabCatalogDetail {
 }
 
 # vLab Catalog Item Admin
-function menu4vLabCatalogDetailAdmin {  
+function menu4vLabCatalogDetailAdmin {
 	$done=$false
-	do { 
+	do {
 		$wanip=""
 		$reldate=""
 		$gateway=get-vapp "$CURRENTVLAB" | get-vm | where { $_.Name -eq "gateway" }
 		if ( $gateway ) { $wanip=$gateway.guest.IPAddress[0] }
-		#$wanip=$(get-vapp "$CURRENTVLAB" | get-vm | where { $_.Name -eq "gateway" }).guest.IPAddress[0]
 		$relsnap=get-ncvol | where { $_.Name -eq "$CURRENTVLAB" } | get-ncsnapshot | where { $_.Name -eq "master" }
 		if ( $relsnap ) { $reldate=$relsnap.Created }
 		else { $reldate = "NOT RELEASED" }
-		
+
 		Write-header "vLab Catalog Item Admin"
 		#          #12345678901234567890123456789012345678901234567890123456789012345678901234567890
 		Write-Host
 		Write-Host "vLAB    : $CURRENTVLAB"
 		Write-Host "Released: $reldate"
-		Write-Host "IP      : $wanip"  
-		Write-Host 
+		Write-Host "IP      : $wanip"
+		Write-Host
 		Write-Host "Virtual Machines:"
-		get-vapp | where { $_.Name -eq "$CURRENTVLAB" } | get-vm | sort Name | format-table 
+		get-vapp | where { $_.Name -eq "$CURRENTVLAB" } | get-vm | sort Name | format-table
 		Write-Host "Virtual Networks:"
 		get-virtualportgroup | where { $_.Name -like "$CURRENTVLAB*" } | sort Name | format-table -Property Name,VlanID -Autosize
 		Write-Host "--------------------------------------------------------------------------------"
 		Write-Host " [P]rovision | [S]tart [U]Shutdown [K]ill [L]aunch | [A]dmin | [R]efresh [B]ack "
 		Write-Host "--------------------------------------------------------------------------------"
 		Write-Host " [D]isable [E]nable"
-		Write-Host "--------------------------------------------------------------------------------"		
+		Write-Host "--------------------------------------------------------------------------------"
 		$selection=Read-Host "::>"
 		if     ( "$selection" -eq "b" ) { $done=$true }
 		elseif ( "$selection" -eq "r" ) { $done=$false }
 		elseif ( "$selection" -eq "m" ) { menuMain }
 		elseif ( "$selection" -eq "d" ) { .\remove-vlab "$CURRENTVLAB" }
 		elseif ( "$selection" -eq "e" ) { .\import-vlabtemplate "$CURRENTVLAB" }
-		elseif ( "$selection" -eq "s" ) { get-vapp "$CURRENTVLAB" | get-vm | start-vm }	
-		elseif ( "$selection" -eq "k" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vm }	
+		elseif ( "$selection" -eq "s" ) { get-vapp "$CURRENTVLAB" | get-vm | start-vm }
+		elseif ( "$selection" -eq "k" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vm }
 		elseif ( "$selection" -eq "u" ) { get-vapp "$CURRENTVLAB" | get-vm | where { $_.PowerState -eq "PoweredOn" } | stop-vmguest }
-		elseif ( "$selection" -eq "l" ) { 
+		elseif ( "$selection" -eq "l" ) {
 			if ( $wanip ) { mstsc /v:"$wanip" /admin /f }
-		}	
-		elseif ( "$selection" -eq "p" ) {	
+		}
+		elseif ( "$selection" -eq "p" ) {
 			Write-Header "Provisioning..."
 			Write-Host
 			Write-Host
 			Write-Host
 			Write-Host
-			$result=.\new-vlabclone.ps1 $CURRENTVLAB 
+			$result=.\new-vlabclone.ps1 $CURRENTVLAB
 			$CURRENTVLAB=$result.Name
 			menu3vLabDetail
 			$done=$true
@@ -254,7 +279,7 @@ function menuAdminMenu {
 		write-host " 2. Set Credentials"
 		write-host
 		write-host
-		write-host		
+		write-host
 		#          #12345678901234567890123456789012345678901234567890123456789012345678901234567890
 		Write-Host "--------------------------------------------------------------------------------"
 		Write-Host "                                                             | [R]efresh [B]ack "
@@ -281,7 +306,7 @@ function menuSettingsMenu {
 		Write-Host "--------------------------------------------------------------------------------"
 		$selection = Read-Host "::>"
 		if ( $selection -eq "b" ) { $done=$true }
-		if ( $conf[$selection] ) { 
+		if ( $conf[$selection] ) {
 			$key=$selection
 			$oldval=$conf[$selection]
 			$newval = Read-Host "Enter $selection [ $oldval ]"

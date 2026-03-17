@@ -1,4 +1,27 @@
-﻿Get-Module -ListAvailable PowerCLI* | Import-Module
+<#
+.SYNOPSIS
+    Deploys an Ubuntu Server VM from a template with OS customization.
+.DESCRIPTION
+    Clones the Ubuntu VM template (dc3-srv-ubuntu00) to create a new VM
+    (dc3-srv-ubuntu01), applies the "ubuntu-script" OS customization spec,
+    configures CPU/memory/network, powers on the VM, waits for the
+    customization spec to complete (VM powers off when done), takes a
+    post-customization snapshot, then powers the VM back on.
+    Hard-coded values (vCenter IP, cluster, template) should be
+    parameterized before production use — run /script-migrate to standardize.
+.NOTES
+    Author  : humbledgeeks-allen
+    Date    : 2026-03-16
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/vCenter/PowerShell
+    Warning : Contains hardcoded vCenter IP (10.103.16.10) and VM names.
+              Use /script-migrate to convert to parameters before reuse.
+    Prereq  : PowerCLI installed; OS customization spec "ubuntu-script"
+              must exist in vCenter; template "dc3-srv-ubuntu00" must exist.
+#>
+
+Get-Module -ListAvailable PowerCLI* | Import-Module
 Set-PowerCLIConfiguration -InvalidCertificateAction Ignore
 Connect-VIServer -Server 10.103.16.10
 

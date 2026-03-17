@@ -1,0 +1,157 @@
+name: Lint & Security Scan
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+
+  # ─────────────────────────────────────────────
+  # 1. PowerShell — PSScriptAnalyzer
+  # ─────────────────────────────────────────────
+  powershell-lint:
+    name: PSScriptAnalyzer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: Run PSScriptAnalyzer on all .ps1 files
+        shell: pwsh
+        run: |
+          $results = Get-ChildItem -Recurse -Filter *.ps1 |
+            Where-Object { $_.FullName -notmatch '(\.git|\.github)' } |
+            ForEach-Object {
+              Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error, Warning
+            }
+
+          if ($results) {
+            $results | Format-Table -AutoSize
+            Write-Error "PSScriptAnalyzer found $($results.Count) issue(s). See output above."
+            exit 1
+          } else {
+            Write-Host "✅ PSScriptAnalyzer: No errors or warnings found."
+          }
+
+  # ─────────────────────────────────────────────
+  # 2. Ansible — ansible-lint
+  # ─────────────────────────────────────────────
+  ansible-lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+
+      - name: Run ansible-lint on all playbooks
+        run: |
+          # Find all yml files that look like Ansible playbooks (contain 'hosts:' or 'tasks:')
+          PLAYBOOKS=$(grep -rl "hosts:\|tasks:" . --include="*.yml" | grep -v ".github" | grep -v "vars\." | grep -v "docker-compose")
+          if [ -z "$PLAYBOOKS" ]; then
+            echo "No playbooks found."
+            exit 0
+          fi
+          echo "Linting playbooks:"
+          echo "$PLAYBOOKS"
+          ansible-lint $PLAYBOOKS || exit 1
+
+  # ─────────────────────────────────────────────
+  # 3. Secret / Credential Scan
+  # ─────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Scan for hardcoded credentials
+        run: |
+          echo "Scanning for hardcoded passwords, tokens, and API keys..."
+
+          FOUND=0
+
+          # Patterns that suggest a hardcoded secret
+          PATTERNS=(
+            'password\s*=\s*["\x27][^"\x27$\{][^"\x27]{2,}["\x27]'
+            'passwd\s*=\s*["\x27][^"\x27$\{][^"\x27]{2,}["\x27]'
+            'api[_-]?key\s*=\s*["\x27][^"\x27$\{]{8,}["\x27]'
+            'secret\s*=\s*["\x27][^"\x27$\{]{8,}["\x27]'
+            'token\s*=\s*["\x27][^"\x27$\{]{8,}["\x27]'
+          )
+
+          for pattern in "${PATTERNS[@]}"; do
+            HITS=$(grep -rniE "$pattern" . \
+              --include="*.ps1" --include="*.yml" --include="*.py" --include="*.sh" \
+              --exclude-dir=".git" --exclude-dir=".github" \
+              | grep -v "vault_" \
+              | grep -v "#.*password" \
+              | grep -v "\.SYNOPSIS" \
+              | grep -v "no_log" \
+              | grep -v "example\|sample\|placeholder\|changeme\|yourpassword\|CHANGE_ME")
+            if [ -n "$HITS" ]; then
+              echo "⚠️  Potential hardcoded secret found:"
+              echo "$HITS"
+              FOUND=1
+            fi
+          done
+
+          if [ "$FOUND" -eq 1 ]; then
+            echo ""
+            echo "❌ Secrets scan failed. Remove hardcoded credentials and use Ansible Vault or PSCredential instead."
+            exit 1
+          else
+            echo "✅ No hardcoded credentials found."
+          fi
+
+  # ─────────────────────────────────────────────
+  # 4. Script Header Compliance Check
+  # ─────────────────────────────────────────────
+  header-check:
+    name: Header Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check PowerShell scripts for .SYNOPSIS
+        run: |
+          echo "Checking PowerShell scripts for required .SYNOPSIS header..."
+          MISSING=$(grep -rL "\.SYNOPSIS" . --include="*.ps1" | grep -v ".github")
+          if [ -n "$MISSING" ]; then
+            echo "❌ The following scripts are missing a .SYNOPSIS header:"
+            echo "$MISSING"
+            exit 1
+          else
+            echo "✅ All PowerShell scripts have .SYNOPSIS headers."
+          fi
+
+      - name: Check Ansible playbooks for Author header
+        run: |
+          echo "Checking Ansible playbooks for Author header..."
+          MISSING=""
+          for f in $(grep -rl "hosts:\|tasks:" . --include="*.yml" | grep -v ".github" | grep -v "vars\." | grep -v "docker-compose"); do
+            if ! grep -qi "author" "$f"; then
+              MISSING="$MISSING\n  $f"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo -e "❌ The following playbooks are missing an Author header:$MISSING"
+            exit 1
+          else
+            echo "✅ All Ansible playbooks have Author headers."
+          fi

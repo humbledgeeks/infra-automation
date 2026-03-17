@@ -1,4 +1,20 @@
-﻿#========================================================================================================================
+﻿<#
+.SYNOPSIS
+    Install the NetApp NFS VAAI VIB on ESXi hosts via esxcli.
+.DESCRIPTION
+    Connects to a standalone ESXi host or vCenter and installs the NetApp NAS Plugin VIB
+    (NetAppNasPlugin) from a specified datastore path using the esxcli software vib install
+    interface. Requires the VIB to be pre-staged on a datastore accessible to the host.
+.NOTES
+    Author  : HumbledGeeks
+    Date    : 2023-06-05
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/NetApp/ONTAP/PowerShell
+    WARNING : Contains hardcoded ESXi credentials. Replace with Get-Credential before production use.
+              Run /script-migrate on this file to update to repo credential standards.
+#>
+#========================================================================================================================
 # 
 # AUTHOR: HumbledGeeks  
 # DATE  : 06/05/2023

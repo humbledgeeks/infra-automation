@@ -1,3 +1,21 @@
+<#
+.SYNOPSIS
+    CSV-driven ESXi host configuration: applies NTP, DNS, security hardening, NFS settings, and networking to all lab hosts.
+.DESCRIPTION
+    Reads a list of hosts from configure_lab_hosts.csv and connects to each, applying full ESXi configuration:
+    NTP, DNS, security hardening advanced settings, NetApp NFS best-practice settings, vSwitch layout with
+    multiple port groups, iSCSI vmk ports, NFS datastore mount, and scratch location. The first host is
+    configured separately (with full vSwitch setup) before the remaining hosts are processed.
+.NOTES
+    Author  : HumbledGeeks (Splinter & Raphael)
+    Date    : 2023-05-26
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Prereq  : configure_lab_hosts.csv in the same directory as this script
+    Repo    : infra-automation/VMware/ESXi/PowerShell/Host-Config
+    WARNING : Contains hardcoded ESXi credentials (hostpass). Replace with Get-Credential before production use.
+              Run /script-migrate on this file to update to repo credential standards.
+#>
 #========================================================================================================================
 # 
 # AUTHOR: HumbledGeeks (Splinter & Raphael) 

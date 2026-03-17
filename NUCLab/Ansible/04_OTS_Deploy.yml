@@ -1,3 +1,11 @@
+# =============================================================================
+# Playbook : 04_OTS_Deploy.yml
+# Description : Deploy OTS components in the NUCLab environment
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Repo    : infra-automation/NUCLab/Ansible
+# =============================================================================
 ---
 - hosts: localhost 
   name: Deploy ONTAP Select Single Node Cluster

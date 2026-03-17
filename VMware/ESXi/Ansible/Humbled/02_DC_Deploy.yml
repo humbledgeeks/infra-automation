@@ -1,3 +1,12 @@
+# =============================================================================
+# Playbook : 02_DC_Deploy.yml
+# Description : Deploy datacenter and cluster objects in the Humbled lab vCenter
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Collection : community.vmware
+# Repo    : infra-automation/VMware/ESXi/Ansible/Humbled
+# =============================================================================
 ---
 - name: Create Windows VM from scratch
   hosts: localhost

@@ -1,4 +1,19 @@
 <#
+.SYNOPSIS
+    Back up ESXi host configurations with interactive menu, dry-run, log rotation, and HTML summary.
+.DESCRIPTION
+    Connects to vCenter, standalone hosts, or a CSV list and runs Get-VMHostFirmware to back up each host's
+    configuration bundle to a timestamped per-host folder. Supports dry-run mode, auto log rotation
+    (removes HTML summaries older than 14 days), color-coded console output, and an HTML summary report
+    with per-host status (SUCCESS, FAILURE, DRY-RUN).
+.NOTES
+    Author  : Abi Perez and Allen Johnson
+    Date    : 2025-07-28
+    Version : 2.0
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/ESXi/PowerShell/Host-Config
+    Changes : Interactive menu, dry-run, CSV import, HTML summary, auto log rotation
+
     ESXi Host Configuration Backup Script
     Version: 2.0
     Author: Abi Perez and Allen Johnson

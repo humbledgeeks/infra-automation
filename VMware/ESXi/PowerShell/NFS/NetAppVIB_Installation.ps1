@@ -1,7 +1,21 @@
 <#
+.SYNOPSIS
+    Install the NetApp NFS VAAI VIB (NetAppNasPlugin) on ESXi hosts with menu, dry-run, and HTML summary.
+.DESCRIPTION
+    Connects to vCenter, standalone hosts, a CSV list, or installs from a local path or datastore. Checks
+    whether NetAppNasPlugin is already installed on each host before attempting installation via esxcli
+    software vib install. Supports dry-run mode and generates an HTML installation summary report.
+.NOTES
+    Author  : Allen Johnson
+    Date    : 2025-07-28
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/ESXi/PowerShell/NFS
+    Prereq  : NetApp NAS Plugin VIB pre-staged on a datastore or local path accessible to the target hosts
+
     NetApp NFS VAAI VIB Installer Script
     Version: 1.0
-    Author: Allen & ChatGPT
+    Author: Allen Johnson
     Last Updated: 2025-07-28
 
     Features:

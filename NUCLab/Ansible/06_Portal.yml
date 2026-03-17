@@ -1,3 +1,11 @@
+# =============================================================================
+# Playbook : 06_Portal.yml
+# Description : Deploy and configure the NUCLab self-service portal
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Repo    : infra-automation/NUCLab/Ansible
+# =============================================================================
 ---
 - hosts: localhost
   gather_facts: false

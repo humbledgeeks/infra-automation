@@ -1,0 +1,171 @@
+---
+# =============================================================================
+# Playbook : ilo-gather-server-health.yml
+# Description : Queries the HPE iLO Redfish REST API to gather a read-only
+#               health summary for a ProLiant server (DL380, DL360, etc.).
+#               Retrieves system overview, processor, memory, power, thermal,
+#               and firmware inventory via /redfish/v1/ endpoints.
+#               Read-only — no changes made to the server.
+# Author  : humbledgeeks-allen
+# Date    : 2026-03-16
+# Version : 1.0
+# API     : HPE iLO Redfish REST API v1 (uri module)
+# Repo    : infra-automation/HPE/Compute/Ansible
+# Usage   : ansible-playbook ilo-gather-server-health.yml --ask-vault-pass
+# Notes   : Supports iLO 5 (Gen10) and iLO 6 (Gen11).
+#           For multiple servers, use a loop or separate inventory group.
+# =============================================================================
+
+- name: HPE iLO - Gather ProLiant Server Health
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ilo_ip:       "{{ vault_ilo_ip }}"
+    ilo_username: "{{ vault_ilo_username }}"
+    ilo_password: "{{ vault_ilo_password }}"
+    ilo_base_url: "https://{{ vault_ilo_ip }}/redfish/v1"
+    ilo_auth:
+      force_basic_auth: true
+      user:             "{{ vault_ilo_username }}"
+      password:         "{{ vault_ilo_password }}"
+      validate_certs:   false   # Set true with valid iLO cert in production
+
+  tasks:
+
+    # --- System Overview ---
+    - name: Get iLO system overview
+      uri:
+        url:              "{{ ilo_base_url }}/Systems/1/"
+        method:           GET
+        force_basic_auth: "{{ ilo_auth.force_basic_auth }}"
+        user:             "{{ ilo_auth.user }}"
+        password:         "{{ ilo_auth.password }}"
+        validate_certs:   "{{ ilo_auth.validate_certs }}"
+        return_content:   true
+        status_code:      200
+      register: system_info
+      no_log: true
+
+    - name: Display system overview
+      debug:
+        msg: >-
+          Model: {{ system_info.json.Model | default('N/A') }}
+          | Serial: {{ system_info.json.SerialNumber | default('N/A') }}
+          | Health: {{ system_info.json.Status.Health | default('N/A') }}
+          | Power: {{ system_info.json.PowerState | default('N/A') }}
+
+    # --- Processors ---
+    - name: Get processor inventory
+      uri:
+        url:              "{{ ilo_base_url }}/Systems/1/Processors/"
+        method:           GET
+        force_basic_auth: "{{ ilo_auth.force_basic_auth }}"
+        user:             "{{ ilo_auth.user }}"
+        password:         "{{ ilo_auth.password }}"
+        validate_certs:   "{{ ilo_auth.validate_certs }}"
+        return_content:   true
+        status_code:      200
+      register: proc_info
+      no_log: true
+
+    - name: Display processor count
+      debug:
+        msg: "Processors found: {{ proc_info.json.Members | length }}"
+
+    # --- Memory ---
+    - name: Get memory summary
+      uri:
+        url:              "{{ ilo_base_url }}/Systems/1/Memory/"
+        method:           GET
+        force_basic_auth: "{{ ilo_auth.force_basic_auth }}"
+        user:             "{{ ilo_auth.user }}"
+        password:         "{{ ilo_auth.password }}"
+        validate_certs:   "{{ ilo_auth.validate_certs }}"
+        return_content:   true
+        status_code:      200
+      register: memory_info
+      no_log: true
+
+    - name: Display memory info
+      debug:
+        msg: "Total Memory DIMMs: {{ memory_info.json.Members | length }}"
+
+    # --- Thermal (Fans and Temperatures) ---
+    - name: Get thermal status
+      uri:
+        url:              "{{ ilo_base_url }}/Chassis/1/Thermal/"
+        method:           GET
+        force_basic_auth: "{{ ilo_auth.force_basic_auth }}"
+        user:             "{{ ilo_auth.user }}"
+        password:         "{{ ilo_auth.password }}"
+        validate_certs:   "{{ ilo_auth.validate_certs }}"
+        return_content:   true
+        status_code:      200
+      register: thermal_info
+      no_log: true
+
+    - name: Display fan status
+      debug:
+        msg: "Fan: {{ item.Name }} | Status: {{ item.Status.Health | default('N/A') }} | Speed: {{ item.Reading | default('N/A') }}%"
+      loop: "{{ thermal_info.json.Fans }}"
+      loop_control:
+        label: "{{ item.Name }}"
+      when: thermal_info.json.Fans is defined
+
+    # --- Power ---
+    - name: Get power supply status
+      uri:
+        url:              "{{ ilo_base_url }}/Chassis/1/Power/"
+        method:           GET
+        force_basic_auth: "{{ ilo_auth.force_basic_auth }}"
+        user:             "{{ ilo_auth.user }}"
+        password:         "{{ ilo_auth.password }}"
+        validate_certs:   "{{ ilo_auth.validate_certs }}"
+        return_content:   true
+        status_code:      200
+      register: power_info
+      no_log: true
+
+    - name: Display power supply status
+      debug:
+        msg: >-
+          PSU: {{ item.Name }}
+          | Status: {{ item.Status.Health | default('N/A') }}
+          | State: {{ item.Status.State | default('N/A') }}
+      loop: "{{ power_info.json.PowerSupplies }}"
+      loop_control:
+        label: "{{ item.Name }}"
+      when: power_info.json.PowerSupplies is defined
+
+    # --- iLO Manager Info ---
+    - name: Get iLO firmware version
+      uri:
+        url:              "{{ ilo_base_url }}/Managers/1/"
+        method:           GET
+        force_basic_auth: "{{ ilo_auth.force_basic_auth }}"
+        user:             "{{ ilo_auth.user }}"
+        password:         "{{ ilo_auth.password }}"
+        validate_certs:   "{{ ilo_auth.validate_certs }}"
+        return_content:   true
+        status_code:      200
+      register: ilo_info
+      no_log: true
+
+    - name: Display iLO firmware version
+      debug:
+        msg: "iLO Version: {{ ilo_info.json.FirmwareVersion | default('N/A') }} | Model: {{ ilo_info.json.Model | default('N/A') }}"
+
+    # --- Validation ---
+    - name: Validate - confirm system health data was returned
+      assert:
+        that:
+          - system_info.json is defined
+          - system_info.json.Status is defined
+          - system_info.json.Status.Health is defined
+        success_msg: >-
+          iLO health data gathered from {{ ilo_ip }} —
+          {{ system_info.json.Model | default('Unknown') }}
+          Health: {{ system_info.json.Status.Health }}
+        fail_msg: "Failed to retrieve system health from iLO at {{ ilo_ip }}"

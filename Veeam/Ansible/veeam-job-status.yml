@@ -1,0 +1,104 @@
+---
+# =============================================================================
+# Playbook : veeam-job-status.yml
+# Description : Queries the Veeam Backup & Replication REST API (port 9419)
+#               to retrieve job definitions and the latest session results.
+#               Read-only — no changes made to the environment.
+# Author  : humbledgeeks-allen
+# Date    : 2026-03-16
+# Version : 1.0
+# API     : Veeam VBR REST API v1 (uri module)
+# Repo    : infra-automation/Veeam/Ansible
+# Usage   : ansible-playbook veeam-job-status.yml --ask-vault-pass
+# Notes   : Requires Veeam B&R v11+ with REST API enabled (default port 9419)
+# =============================================================================
+
+- name: Veeam VBR - Gather Job Status
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    vbr_server:   "{{ vault_vbr_server }}"
+    vbr_username: "{{ vault_vbr_username }}"
+    vbr_password: "{{ vault_vbr_password }}"
+    vbr_api_base: "https://{{ vbr_server }}:9419/api/v1"
+
+  tasks:
+
+    - name: Authenticate to VBR REST API
+      uri:
+        url: "{{ vbr_api_base }}/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username:   "{{ vbr_username }}"
+          password:   "{{ vbr_password }}"
+        validate_certs: false   # Set true with valid certs in production
+        status_code: 200
+      register: vbr_auth
+      no_log: true   # Prevent credentials appearing in logs
+
+    - name: Set VBR auth headers
+      set_fact:
+        vbr_token: "{{ vbr_auth.json.access_token }}"
+        vbr_headers:
+          Authorization: "Bearer {{ vbr_auth.json.access_token }}"
+          x-api-version: "1.1-rev0"
+
+    - name: Gather VBR backup jobs
+      uri:
+        url: "{{ vbr_api_base }}/jobs"
+        headers: "{{ vbr_headers }}"
+        validate_certs: false
+        status_code: 200
+      register: vbr_jobs
+
+    - name: Display job summary
+      debug:
+        msg: "Job: {{ item.name }} | Type: {{ item.type | default('N/A') }} | Enabled: {{ item.isDisabled | ternary('No','Yes') }}"
+      loop: "{{ vbr_jobs.json.data }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Gather last backup job sessions
+      uri:
+        url: "{{ vbr_api_base }}/sessions?limit=25&orderColumn=CreationTime&orderAsc=false"
+        headers: "{{ vbr_headers }}"
+        validate_certs: false
+        status_code: 200
+      register: vbr_sessions
+
+    - name: Display recent session results
+      debug:
+        msg: >-
+          Session: {{ item.name }}
+          | Result: {{ item.result | default('N/A') }}
+          | State: {{ item.state | default('N/A') }}
+          | End: {{ item.endTime | default('running') }}
+      loop: "{{ vbr_sessions.json.data }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Count sessions by result
+      set_fact:
+        sessions_success: "{{ vbr_sessions.json.data | selectattr('result', 'equalto', 'Success') | list | length }}"
+        sessions_warning: "{{ vbr_sessions.json.data | selectattr('result', 'equalto', 'Warning') | list | length }}"
+        sessions_failed:  "{{ vbr_sessions.json.data | selectattr('result', 'equalto', 'Failed')  | list | length }}"
+
+    - name: Display session totals
+      debug:
+        msg: >-
+          Session totals (last 25) —
+          Success: {{ sessions_success }}
+          Warning: {{ sessions_warning }}
+          Failed: {{ sessions_failed }}
+
+    - name: Validate - confirm API returned data
+      assert:
+        that:
+          - vbr_jobs.json.data is defined
+          - vbr_sessions.json.data is defined
+        success_msg: "VBR job status gathered from {{ vbr_server }} — {{ vbr_jobs.json.data | length }} jobs found"
+        fail_msg: "No job data returned from {{ vbr_server }} — check VBR REST API on port 9419"

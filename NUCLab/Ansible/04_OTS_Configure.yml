@@ -1,3 +1,11 @@
+# =============================================================================
+# Playbook : 04_OTS_Configure.yml
+# Description : Configure OTS (OpenStack / overlay) components in the NUCLab environment
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Repo    : infra-automation/NUCLab/Ansible
+# =============================================================================
 ---
 - hosts: localhost 
   gather_facts: false

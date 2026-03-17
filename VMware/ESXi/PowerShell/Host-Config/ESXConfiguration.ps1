@@ -1,3 +1,19 @@
+<#
+.SYNOPSIS
+    Full ESXi host configuration for HPE cluster environment: add to vCenter, NTP, DNS, networking, vMotion, NFS.
+.DESCRIPTION
+    Connects to a vCenter and adds an HPE ProLiant host, then applies full host configuration: DNS, NTP, SSH enable,
+    AD join, vSwitch0 NIC teaming, NFS/iSCSI vmk ports, vMotion TCP/IP stack, distributed switch migration,
+    NFS datastore mount, scratch location, and NetApp NFS advanced settings. Target: hybriddatacenter.net lab.
+.NOTES
+    Author  : Adrian Wong and Allen Johnson
+    Date    : 2019-01-21
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/ESXi/PowerShell/Host-Config
+    WARNING : Contains hardcoded vCenter credentials (vcenteradminpw). Replace with Get-Credential before production use.
+              Run /script-migrate on this file to update to repo credential standards.
+#>
 #====================================================================================================================
 # 
 # AUTHOR: Adrian Wong and Allen Johnson 

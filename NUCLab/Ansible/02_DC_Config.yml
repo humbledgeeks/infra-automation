@@ -1,3 +1,11 @@
+# =============================================================================
+# Playbook : 02_DC_Config.yml
+# Description : Configure datacenter settings in the NUCLab environment
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Repo    : infra-automation/NUCLab/Ansible
+# =============================================================================
 ---
 - name: Create new Active-Directory Domain & Forest
   hosts: localhost

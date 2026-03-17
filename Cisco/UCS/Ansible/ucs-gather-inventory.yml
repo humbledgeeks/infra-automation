@@ -1,0 +1,65 @@
+---
+# =============================================================================
+# Playbook : ucs-gather-inventory.yml
+# Description : Gathers blade inventory and Service Profile facts from a
+#               Cisco UCS Manager domain. Read-only — no changes made.
+# Author  : humbledgeeks-allen
+# Date    : 2026-03-16
+# Version : 1.0
+# Collection : cisco.ucs
+# Usage   : ansible-playbook ucs-gather-inventory.yml --ask-vault-pass
+# =============================================================================
+
+- name: Cisco UCS - Gather Inventory
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ucs_hostname: "{{ vault_ucs_hostname }}"
+    ucs_username: "{{ vault_ucs_username }}"
+    ucs_password: "{{ vault_ucs_password }}"
+
+  tasks:
+
+    - name: Gather UCS blade inventory
+      cisco.ucs.ucs_managed_objects:
+        hostname: "{{ ucs_hostname }}"
+        username: "{{ ucs_username }}"
+        password: "{{ ucs_password }}"
+        objects:
+          - module: ucsmsdk.mometa.compute.ComputeBlade
+            class: ComputeBlade
+            properties: {}
+        state: present
+      register: blade_facts
+      # Note: using ucs_managed_objects in query mode
+      # For read-only fact gathering, use ucsmsdk directly or PowerShell
+
+    - name: Display blade count
+      debug:
+        msg: "UCS domain {{ ucs_hostname }} - blades found: {{ blade_facts.existing | default([]) | length }}"
+
+    - name: Gather Service Profile associations
+      cisco.ucs.ucs_managed_objects:
+        hostname: "{{ ucs_hostname }}"
+        username: "{{ ucs_username }}"
+        password: "{{ ucs_password }}"
+        objects:
+          - module: ucsmsdk.mometa.ls.LsServer
+            class: LsServer
+            properties: {}
+        state: present
+      register: sp_facts
+
+    - name: Display Service Profile summary
+      debug:
+        msg: "Service Profiles found: {{ sp_facts.existing | default([]) | length }}"
+
+    - name: Validate - confirm connection was successful
+      assert:
+        that:
+          - blade_facts is defined
+          - sp_facts is defined
+        success_msg: "UCS inventory gathered successfully from {{ ucs_hostname }}"
+        fail_msg: "Failed to gather UCS inventory - check credentials and connectivity"

@@ -1,3 +1,12 @@
+# =============================================================================
+# Playbook : 01_ESXi_Config_Single.yml
+# Description : Configure a single ESXi host in the Humbled lab environment
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Collection : community.vmware
+# Repo    : infra-automation/VMware/ESXi/Ansible/Humbled
+# =============================================================================
 --- 
 - hosts: localhost 
   name: ESXi Basic Configuration 

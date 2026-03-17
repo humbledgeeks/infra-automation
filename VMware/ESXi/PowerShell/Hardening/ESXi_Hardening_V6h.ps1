@@ -1,5 +1,21 @@
+<#
+.SYNOPSIS
+    ESXi host hardening script V6h — menu-driven, dry-run, themed HTML report, set/verify/fallback logic.
+.DESCRIPTION
+    Current recommended hardening version. Applies security-focused VMware advanced settings with interactive
+    menu (vCenter / standalone / CSV), dry-run-then-apply flow, strict y/n prompts, per-setting verify after
+    each change, and fallback via AdvancedOptionManager.UpdateOptions. Outputs a themed HTML KPI dashboard
+    and per-host results table. Rollback removed (hardening-only design).
+.NOTES
+    Author  : HumbledGeeks / Allen Johnson / Gary Matsuda
+    Date    : 2025-08-20
+    Version : V6h
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/ESXi/PowerShell/Hardening
+    Warning : Makes configuration changes to ESXi hosts. Always run dry-run first.
+#>
 #====================================================================================================================
-#  AUTHOR: HumbledGeeks / Allen Johnson / Gary Matsuda / Updated by ChatGPT
+#  AUTHOR: HumbledGeeks / Allen Johnson / Gary Matsuda
 #  PURPOSE: ESXi Host Hardening – menu, dry-run, emoji output, themed HTML, sorted settings, flexible logging
 #  DATE: 2025-08-20
 #  VERSION: V6h (hardening-only)

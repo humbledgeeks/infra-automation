@@ -1,3 +1,37 @@
+<#
+.SYNOPSIS
+    Generates vSphere HTML5, VMRC, or WebMKS console URLs for a named VM.
+.DESCRIPTION
+    Wraps the Get-VMConsoleURL function which generates console access URLs
+    for a VM running in vCenter. Supports three URL types:
+      - HTML5 console (default) : opens in the vSphere Web Client
+      - VMRC URL                : opens in the standalone VMware Remote Console app
+      - WebMKS URL              : raw WebSocket ticket URL (wss://)
+    You must already be connected to vCenter (Connect-VIServer) before calling
+    this function. The generated URL is valid only for the duration of the
+    acquired session ticket.
+.PARAMETER VMName
+    The name of the VM to generate a console URL for.
+.PARAMETER vmrcUrl
+    Set to $true to generate a VMRC URL instead of HTML5.
+.PARAMETER webmksUrl
+    Set to $true to generate a WebMKS URL instead of HTML5.
+.EXAMPLE
+    Get-VMConsoleURL -VMName "dc3-srv-ubuntu01"
+.EXAMPLE
+    Get-VMConsoleURL -VMName "dc3-srv-ubuntu01" -vmrcUrl $true
+.EXAMPLE
+    Get-VMConsoleURL -VMName "dc3-srv-ubuntu01" -webmksUrl $true
+.NOTES
+    Author  : humbledgeeks-allen
+    Date    : 2026-03-16
+    Version : 1.0
+    Module  : VMware.PowerCLI
+    Repo    : infra-automation/VMware/vCenter/PowerShell/vLab
+    Credit  : Original function by William Lam (VMware) — www.virtuallyghetto.com
+    Prereq  : Must be connected to vCenter via Connect-VIServer before calling.
+#>
+
 Function Get-VMConsoleURL {
 <#
     .NOTES
@@ -87,7 +121,7 @@ Function Get-VMConsoleURL {
         $SessionMgr = Get-View $DefaultViserver.ExtensionData.Content.SessionManager
         $Ticket = $SessionMgr.AcquireCloneTicket()
         $VCSSLThumbprint = Get-SSLThumbprint "https://$VCname"
-        $URL = "https://$VCName`:9443/vsphere-client/webconsole.html?vmId=$VMMoref&vmName=$VMname&serverGuid=$VCInstasnceUUID&locale=en_US&host=$VCName`:443&sessionTicket=$Ticket&thumbprint=$VCSSLThumbprint”
+        $URL = "https://$VCName`:9443/vsphere-client/webconsole.html?vmId=$VMMoref&vmName=$VMname&serverGuid=$VCInstasnceUUID&locale=en_US&host=$VCName`:443&sessionTicket=$Ticket&thumbprint=$VCSSLThumbprint"
     }
     $URL
 }

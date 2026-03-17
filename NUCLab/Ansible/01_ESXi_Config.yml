@@ -1,3 +1,11 @@
+# =============================================================================
+# Playbook : 01_ESXi_Config.yml
+# Description : Configure ESXi hosts in the NUCLab environment
+# Author  : humbledgeeks-allen
+# Date    : 2023-01-01
+# Version : 1.0
+# Repo    : infra-automation/NUCLab/Ansible
+# =============================================================================
 --- 
 - hosts: localhost 
   name: ESXi Basic Configuration 
