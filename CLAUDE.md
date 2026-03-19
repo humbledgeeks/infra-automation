@@ -4,6 +4,55 @@ This repository uses AI-assisted development and infrastructure engineering. The
 
 The assistant is expected to operate at the level of a senior infrastructure engineer, principal architect, or consulting SME who has spent decades working across enterprise environments, service providers, and large-scale datacenters.
 
+---
+
+## 🔄 Current Status — Last Updated 2026-03-19
+
+> **Read this first.** This section is the live handoff context so you can pick up exactly where we left off.
+
+### Most Recent Work: Cisco UCS FlexPod with NetApp ASA A30
+
+The primary active workstream is the **Cisco UCS FlexPod automation suite** in:
+`Cisco/UCS/PowerShell/HumbledGeeks/`
+
+This folder contains a complete end-to-end PowerShell automation set for deploying a Cisco UCS FlexPod with NetApp ASA A30 storage on Broadcom VCF. Each numbered script maps to a step in the companion blog post.
+
+| Script | Purpose |
+|--------|---------|
+| `00-prereqs-and-connect.ps1` | Module imports, UCSM connection |
+| `01-pools.ps1` | MAC, WWPN, WWNN, UUID pools |
+| `02-vlans-vsans.ps1` | VLAN and VSAN fabric configuration |
+| `03-policies.ps1` | QoS, network control, local disk, BIOS policies |
+| `04-vnic-templates.ps1` | vNIC templates (A/B fabric) |
+| `05-vhba-templates.ps1` | vHBA templates (FC) |
+| `06-service-profile-template.ps1` | Service Profile Template assembly |
+| `07-deploy-service-profiles.ps1` | Derive and deploy Service Profiles |
+| `07b-associate-service-profiles.ps1` | Associate profiles to blades |
+| `09-fc-zoning.ps1` | Pre-built FC zones for ASA A30 (run before cabling) |
+| `10-verify.ps1` | Post-deployment validation |
+
+### Blog Post (Live)
+
+The companion blog post is **LIVE** on HumbledGeeks.com:
+- **URL**: https://humbledgeeks.com/automating-a-cisco-ucs-flexpod-with-netapp-asa-a30-on-broadcom-vcf/
+- **WP Post ID**: 1794
+- **Draft copy in repo**: `Cisco/UCS/PowerShell/HumbledGeeks/blog-post-draft.md`
+- **Title**: "Automating a Cisco UCS FlexPod with NetApp ASA A30 on Broadcom VCF"
+
+### Recent Changes (Session 2026-03-19)
+
+- Step 0 PowerShell snippet updated to use correct `Cisco.UCSManager` module suite (not legacy `Cisco.UCSManager.Utils`)
+- `$UCSM_PASSWORD` credential pattern standardised across all scripts
+- Blog post title corrected and synced in this repo and in `zero-to-vcap`
+- All 29 blog post images fixed via WP REST API (proper media IDs assigned)
+- Syntax highlighting fixed permanently via `astra-child/functions.php` (Prism.js loaded site-wide)
+
+### What's Next
+
+- Continue expanding the FlexPod automation suite (additional validation scripts, Ansible playbooks)
+- Any new infrastructure blog posts will have companion scripts added here under the appropriate vendor folder
+- Cross-repo companion: `zero-to-vcap/blog-posts/flexpod-vcf-ucs-foundation.md`
+
 The purpose of the AI assistant is to support engineers by providing technically accurate guidance, architectural insight, automation strategies, and operational best practices across modern infrastructure platforms.
 
 The assistant must prioritize practical, real-world solutions that reflect how enterprise infrastructure is actually designed and operated in production environments.
