@@ -111,11 +111,21 @@ After reboot, acknowledge each chassis in the Equipment tab to trigger discovery
 
 ### Ethernet — 6 vNICs, MTU 1500
 
-| vNIC Pair | Fabric | MTU | Purpose |
-|---|---|---|---|
-| vmnic0 / vmnic1 | A / B | 1500 | ESXi management (vmk0) + vMotion (vmk1) |
-| vmnic2 / vmnic3 | A / B | 1500 | VM workloads trunk — apps, core, Docker, GNS3 |
-| vmnic4 / vmnic5 | A / B | 1500 | VCF overlay / NSX TEP (dedicated path) |
+Each blade gets six virtual NICs (vNICs), presented to ESXi as `vmnic0` through `vmnic5`.
+Think of each vmnic as a logical NIC backed by the physical FI uplinks — Fabric A backs the
+even numbers, Fabric B backs the odd numbers, giving you active/active redundancy across
+both FIs for every traffic type.
+
+**What VLANs are allowed on each vNIC is controlled at the vNIC template level** (Step 4).
+A vNIC template acts as an allowlist — only VLANs explicitly added to that template will be
+visible on that interface. This is how you keep management traffic off the VM workload vNICs
+and keep NSX TEP traffic on its own dedicated pair.
+
+| vNIC Pair | Fabric | MTU | Purpose | VLANs Allowed |
+|---|---|---|---|---|
+| vmnic0 / vmnic1 | A / B | 1500 | ESXi management (vmk0) + vMotion (vmk1) | mgmt, vmotion |
+| vmnic2 / vmnic3 | A / B | 1500 | VM workloads trunk — apps, core, Docker, GNS3 | all workload VLANs |
+| vmnic4 / vmnic5 | A / B | 1500 | VCF overlay / NSX TEP (dedicated path) | TEP VLAN only |
 
 Separating NSX TEP traffic onto vmnic4/5 keeps Geneve-encapsulated overlay frames off the
 VM workload path and simplifies NSX transport zone configuration. All at MTU 1500.
@@ -200,8 +210,30 @@ Add-UcsWwnMemberBlock -WwnPool (Get-UcsWwnPool -Ucs $h -Name 'hg-wwpn-a') -Ucs $
 
 **Full script →** [`02-vlans-vsans.ps1`](https://github.com/humbledgeeks/infra-automation/blob/main/Cisco/UCS/PowerShell/HumbledGeeks/02-vlans-vsans.ps1)
 
-VLANs live in the LAN cloud. VSANs **must** be in the **FC Storage Cloud** — not FC Uplink.
-Getting this wrong means FC ports will never come up correctly.
+**This is where you define every VLAN your environment will use.** All VLANs must be
+created here in the LAN cloud *before* you can assign them to vNIC templates in Step 4.
+Think of this step as building your master VLAN list — if a VLAN isn't defined here,
+it simply won't exist as an option anywhere else in UCSM.
+
+For this FlexPod/VCF build, the VLANs break down like this:
+
+| VLAN Name | ID | Assigned To | Purpose |
+|---|---|---|---|
+| dc3-mgmt | 16 | vmnic0/1 | ESXi host management, KVM access, UCSM |
+| dc3-vmotion | 20 | vmnic0/1 | vMotion live migration traffic |
+| dc3-workload-* | 30–99 | vmnic2/3 | VM guest traffic — apps, Docker, GNS3, etc. |
+| dc3-vcf-tep | 100 | vmnic4/5 | NSX Geneve overlay / VCF TEP encapsulation |
+
+**Key rule:** Every VLAN is created as *Common/Global* (shared across both Fabric A and B)
+with Sharing Type *None*. This makes the VLAN available for assignment on both fabrics
+simultaneously — you only have to create it once.
+
+**How VLANs get to the blades — the vNIC allowlist:** Creating a VLAN here does not
+automatically put it on the blades. In Step 4 you'll create vNIC templates, and each
+template has an explicit list of VLANs it trunks. `vmnic0/1` only gets the management
+and vMotion VLANs. `vmnic2/3` gets all the workload VLANs trunked together.
+`vmnic4/5` gets only the TEP VLAN. This separation is intentional — it keeps broadcast
+domains isolated and makes troubleshooting much cleaner.
 
 **Create VLAN — Common/Global across both fabrics:**
 
@@ -209,11 +241,26 @@ Getting this wrong means FC ports will never come up correctly.
 
 **Create VSAN — Fabric A scoped, VSAN 10, FCoE VLAN 1010:**
 
+VSANs **must** be in the **FC Storage Cloud** — not FC Uplink. Getting this wrong means
+FC ports will never come up correctly. Each VSAN is scoped to a single fabric
+(A or B), giving you true path isolation all the way to the ASA A30 target ports.
+
 ![Create VSAN — FabricA, VSAN ID 10, FCoE VLAN 1010, FC Zoning Disabled](screenshots/20-vsan-create.png)
 
-> Notice **FC Zoning: Disabled** — if the FI is connected to an upstream FC/FCoE switch,
-> do not enable local zoning. For direct-attach to the ASA A30, zoning is handled at the
-> switch level or on the array.
+> **FC Zoning is set to Disabled here — and that is intentional for now, not permanent.**
+> FC Zoning IS required before ESXi can see storage on the ASA A30. But you cannot create
+> zones for devices that haven't logged into the fabric yet. The ASA A30 target WWPNs won't
+> appear in the fabric until the array is physically cabled to FI storage ports 29–32, and
+> the ESXi initiator WWPNs won't be active until service profiles are associated to blades
+> and the hosts are booted. Trying to configure zoning before either of those things happens
+> is skipping steps.
+>
+> **With direct-attach (no MDS switch in the path), the FIs ARE the FC switch** — so UCSM's
+> built-in FC zoning is the right tool. If you had an upstream MDS, you'd leave UCSM zoning
+> disabled and configure zones on the MDS instead. Never enable zoning in both places.
+>
+> FC Zoning configuration is covered in a dedicated follow-up post once the ASA A30 is
+> physically connected. See *What's Next* at the bottom of this post.
 
 **Port Channel — Fabric A uplinks:**
 
@@ -222,10 +269,15 @@ Getting this wrong means FC ports will never come up correctly.
 ![Port Channel A — ports 31 and 32 assigned](screenshots/09-port-channel-a-ports.png)
 
 ```powershell
-# VLAN
-Add-UcsVlan -DefaultNet 'no' -Id 16 -Name 'dc3-mgmt' -Ucs $h -ModifyPresent
+# --- Define all VLANs first (master VLAN list) ---
+# Add every VLAN your environment needs here before touching vNIC templates.
+# Common/Global means the VLAN is available on both Fabric A and B from one definition.
+Add-UcsVlan -DefaultNet 'no' -Id 16  -Name 'dc3-mgmt'        -Ucs $h -ModifyPresent
+Add-UcsVlan -DefaultNet 'no' -Id 20  -Name 'dc3-vmotion'     -Ucs $h -ModifyPresent
+Add-UcsVlan -DefaultNet 'no' -Id 100 -Name 'dc3-vcf-tep'     -Ucs $h -ModifyPresent
+# ... add all workload VLANs in the same pattern
 
-# VSAN — FC Storage Cloud only. FC Zoning disabled (external switch or array handles zoning)
+# VSAN — FC Storage Cloud only. FC Zoning disabled (array handles zoning)
 $vsanA = Add-UcsVsan -Ucs $h -Name 'hg-vsan-a' -Id 10 -FcoeId 1010 `
     -DefaultZoning 'disabled' -ModifyPresent
 
@@ -234,7 +286,7 @@ Add-UcsFabricFcStorageMemberPort -Vsan $vsanA -Ucs $h `
     -FabricId 'A' -SlotId 1 -PortId 29 -ModifyPresent
 # Repeat for ports 30–32 and for FabricB / hg-vsan-b
 
-# Ethernet Port Channel — FabricA
+# Ethernet Port Channel — FabricA (uplinks to Nexus)
 $pcA = Add-UcsFabricEthLanPc -Ucs $h -FabricId 'A' -PortId 1 -Name 'FabricA' -ModifyPresent
 Add-UcsFabricEthLanPcEp -Ucs $h -LanPc $pcA -SlotId 1 -PortId 17 -ModifyPresent
 Add-UcsFabricEthLanPcEp -Ucs $h -LanPc $pcA -SlotId 1 -PortId 18 -ModifyPresent
@@ -490,30 +542,112 @@ Add-UcsVnicIpV4PooledIscsiAddr -ServiceProfile $spt -Ucs $h `
 
 ---
 
-## Step 7 — Deploy Service Profiles
+## Step 7 — Create Service Profiles
+
+Service profiles are the heart of UCS identity management. A service profile is the
+**logical definition of a server** — it carries the UUID, MAC addresses, WWPNs, boot
+policy, vNIC/vHBA bindings, BIOS policy, and maintenance policy. When a profile is
+associated to a physical blade, the blade takes on that identity. Swap a blade, associate
+the profile to the new hardware, and it comes up with the same identity — no OS
+reconfiguration needed.
+
+Because `06-service-profile-template.ps1` already created `hg-esx-template` as an
+**Updating Service Profile Template**, every profile derived from it is a bound instance.
+Any future change to the template (new VLAN, updated BIOS tuning, changed boot policy)
+automatically propagates to all 8 profiles. This is the right model for a homogenous ESXi
+cluster.
+
+### VCF 4+4 Role Split
+
+Eight blades, two roles:
+
+| Service Profile | Blade Slot | VCF Role |
+|---|---|---|
+| `hg-esx-01` | chassis-1 / blade-1 | Management Domain |
+| `hg-esx-02` | chassis-1 / blade-2 | Management Domain |
+| `hg-esx-03` | chassis-1 / blade-3 | Management Domain |
+| `hg-esx-04` | chassis-1 / blade-4 | Management Domain |
+| `hg-esx-05` | chassis-1 / blade-5 | VI Workload Domain |
+| `hg-esx-06` | chassis-1 / blade-6 | VI Workload Domain |
+| `hg-esx-07` | chassis-1 / blade-7 | VI Workload Domain |
+| `hg-esx-08` | chassis-1 / blade-8 | VI Workload Domain |
+
+The management domain (hg-esx-01–04) runs vCenter, NSX Manager, and SDDC Manager.
+The VI workload domain (hg-esx-05–08) is your first compute cluster for actual workloads.
+
+### Step 7a — Create the Profiles (script)
 
 **Full script →** [`07-deploy-service-profiles.ps1`](https://github.com/humbledgeeks/infra-automation/blob/main/Cisco/UCS/PowerShell/HumbledGeeks/07-deploy-service-profiles.ps1)
 
+This script creates all 8 profiles in an **unassociated** state — no blade binding yet.
+Keeping creation and association separate lets you verify the profiles look correct in the
+UCSM GUI before anything is written to hardware.
+
 ```powershell
-# Derive 8 SPs from the template and associate to blades
-1..8 | ForEach-Object {
-    $sp = Add-UcsServiceProfile -Org $org -Ucs $h `
-        -Name "hg-esx-0$_" -SrcTemplName 'hg-esx-template' -ModifyPresent
-    Add-UcsLsBinding -ServiceProfile $sp -Ucs $h `
-        -PnDn "sys/chassis-1/blade-$_" -ModifyPresent | Out-Null
+$spDefs = @(
+    @{ Name = 'hg-esx-01'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-02'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-03'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-04'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-05'; Role = 'VI Workload Domain' },
+    @{ Name = 'hg-esx-06'; Role = 'VI Workload Domain' },
+    @{ Name = 'hg-esx-07'; Role = 'VI Workload Domain' },
+    @{ Name = 'hg-esx-08'; Role = 'VI Workload Domain' }
+)
+
+foreach ($def in $spDefs) {
+    Add-UcsServiceProfile -Org $org -Ucs $h `
+        -Name         $def.Name `
+        -SrcTemplName 'hg-esx-template' `
+        -Type         'instance' `
+        -ModifyPresent
 }
 ```
 
-Because `hg-maint` is set to user-ack, UCSM **will not reboot blades immediately** —
-acknowledge the pending change in the GUI or via PowerShell:
+After running, in UCSM you should see all 8 profiles under
+**Service Profiles → HumbledGeeks** with `AssocState = unassociated`.
+
+> **Verify via PowerShell:**
+> ```powershell
+> Get-UcsServiceProfile -Ucs $h | Where-Object { $_.Dn -like '*HumbledGeeks*' } |
+>     Select-Object Name, Type, SrcTemplName, AssocState | Format-Table -AutoSize
+> ```
+
+### Step 7b — Associate Profiles to Blades (GUI or script)
+
+**Association is intentionally deferred.** Before you associate profiles to blades, you
+need two things in place that aren't ready yet at this stage of the build:
+
+1. **The ASA A30 must be physically cabled** to FI storage ports 29–32. Association
+   activates the vHBA WWPNs and they will log into the FC fabric — but if the storage array
+   isn't connected, those FC logins go nowhere.
+
+2. **FC Zoning must be configured** in UCSM (covered in the follow-up post). Without zones,
+   ESXi will see the FC fabric but won't be able to reach any LUNs on the ASA A30.
+
+When you're ready to associate — either via the UCSM GUI (drag service profile onto a blade)
+or via the script:
+
+**Script →** [`07b-associate-service-profiles.ps1`](https://github.com/humbledgeeks/infra-automation/blob/main/Cisco/UCS/PowerShell/HumbledGeeks/07b-associate-service-profiles.ps1)
+
+```powershell
+# Bind each SP to its physical blade slot
+$blade = Get-UcsBlade -Ucs $h -ChassisId 1 -ServerId 1
+Add-UcsLsBinding -ServiceProfile $sp -Ucs $h -PnDn $blade.Dn
+```
+
+Because `hg-maint` is set to **user-ack**, UCSM will not reboot blades immediately.
+After association, acknowledge the pending change in the GUI under each service profile →
+**Pending Changes → Acknowledge**, or via PowerShell:
 
 ```powershell
 Get-UcsLsmaintAck -Ucs $h | Where-Object { $_.AdminState -eq 'trigger-immediate' } |
     Set-UcsLsmaintAck -AdminState 'trigger-immediate' -Force
 ```
 
-> **Full script** →
-> [`07-deploy-service-profiles.ps1`](https://github.com/humbledgeeks/infra-automation/blob/main/Cisco/UCS/PowerShell/HumbledGeeks/07-deploy-service-profiles.ps1)
+The blade will power-cycle and come up with the identity defined in the service profile —
+UUID from `hg-uuid-pool`, MACs from `hg-mac-a/b`, WWPNs from `hg-wwpn-a/b`, and the
+KVM management IP from `hg-ext-mgmt`.
 
 ---
 
@@ -662,16 +796,41 @@ your firmware matrix against the CVD for your target versions.
 
 ## What's Next
 
-This post covers the UCS foundation. The follow-up will walk through deploying
-**Broadcom VCF 5.x** on top — four blades for the management domain (vCenter, NSX,
-SDDC Manager) and four blades for the first VI workload domain, with the
-[NetApp ASA A30](https://www.netapp.com/data-storage/asa/) providing FC block storage
-datastores to both domains.
+This post covers the UCS foundation — pools, policies, VLANs, VSANs, vNIC/vHBA templates,
+and the service profile template. The UCS side is ready. What comes next breaks into two
+separate posts.
 
-1. **FC Zoning** — Zone each ESXi initiator WWPN to the ASA A30 target ports per fabric
-2. **ESXi staging** — Mount ISO to virtual KVM DVD or configure PXE on dc3-mgmt (VLAN 16)
-3. **Associate SPs** — Run `07-deploy-service-profiles.ps1`; acknowledge user-ack pending changes
-4. **VCF bringup** — SDDC Manager Cloud Builder handles domain deployment; KVM IPs from `hg-ext-mgmt` become host management IPs in the deployment JSON
+### Post 2 — Connecting the ASA A30 and FC Zoning
+
+Before VCF can go anywhere, the storage fabric has to be fully operational. That means:
+
+1. **Cable the ASA A30** — FC ports on the array to FI storage ports 29–32 (two cables per
+   fabric for redundancy)
+2. **Associate service profiles** — Run `07b-associate-service-profiles.ps1` (or use the UCSM GUI) and acknowledge the
+   user-ack pending changes; this activates the WWPN assignments from your pools and brings
+   the vHBAs online as real FC initiators in the fabric
+3. **FC Zoning in UCSM** — Once the ASA A30 target WWPNs and ESXi initiator WWPNs are both
+   logged into the fabric, create zones in UCSM pairing each initiator to the correct target
+   ports per fabric. With direct-attach, the FIs ARE the FC switch — UCSM zoning is the right
+   tool here, not an external MDS
+4. **ONTAP igroups and LUN mapping** — On the ASA A30, create initiator groups containing
+   your ESXi host WWPNs, create LUNs, and map them to the igroup so datastores can be
+   presented to ESXi
+
+This step has its own post because FC Zoning cannot be configured until the physical
+connection exists and both sides are logged into the fabric. It's a hard dependency —
+not something you can script ahead of time.
+
+### Post 3 — VCF 4+4 Deployment (Management + Workload Domain)
+
+Once storage is presenting and ESXi is installed on all eight blades:
+
+1. **ESXi staging** — Mount ISO to virtual KVM DVD or PXE boot on dc3-mgmt (VLAN 16)
+2. **VCF Cloud Builder** — SDDC Manager Cloud Builder handles management domain deployment;
+   KVM IPs from `hg-ext-mgmt` pool become host management IPs in the deployment JSON
+3. **Management domain** — Four blades running vCenter, NSX Manager, and SDDC Manager
+4. **VI workload domain** — Four blades commissioned as the first workload domain, with
+   ASA A30 FC datastores available to both domains via the zones created in Post 2
 
 ---
 
@@ -687,7 +846,8 @@ https://github.com/humbledgeeks/infra-automation
     ├── 04-vnic-templates.ps1
     ├── 05-vhba-templates.ps1
     ├── 06-service-profile-template.ps1
-    ├── 07-deploy-service-profiles.ps1
+    ├── 07-deploy-service-profiles.ps1   ← create 8 profiles (unassociated)
+    ├── 07b-associate-service-profiles.ps1 ← bind profiles to blades (run after ASA A30 + FC zoning)
     ├── 08-verify.ps1
     └── screenshots/             ← all UCSM GUI screenshots referenced above
 ```

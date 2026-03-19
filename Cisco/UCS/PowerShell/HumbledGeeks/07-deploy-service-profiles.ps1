@@ -1,73 +1,70 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Section 07 – Derive and associate Service Profiles from template
+    Section 07 – Create Service Profiles from template (no blade association)
 .DESCRIPTION
-    Derives N named Service Profiles from hg-esx-template and associates
-    each one to a physical blade in chassis 1.
+    Instantiates 8 named Service Profiles from hg-esx-template.
+    Profiles are created in an unassociated state — blade binding is intentionally
+    deferred so you can assign blades manually via the UCSM GUI (or run
+    07b-associate-service-profiles.ps1 when ready).
 
-    Blade-to-SP mapping (edit as needed):
-      hg-esx-01  → chassis-1/blade-1  (B200 M5)
-      hg-esx-02  → chassis-1/blade-2
-      hg-esx-03  → chassis-1/blade-3
-      ... up to hg-esx-08 / blade-8
+    VCF 4+4 role mapping:
+      hg-esx-01 … hg-esx-04  →  Management Domain  (vCenter, NSX Mgr, SDDC Manager)
+      hg-esx-05 … hg-esx-08  →  VI Workload Domain  (first workload cluster)
 
-    Set $DeployCount to the number of SPs you want to instantiate.
-.PARAMETER DeployCount
-    How many service profiles to derive and associate (1–8).
+    Re-running this script is idempotent — ModifyPresent skips profiles that
+    already exist.
 .NOTES
     Run 06-service-profile-template.ps1 first.
-    Blades must be discovered (assocState=unassociated) before association.
+    To associate profiles to blades: use the UCSM GUI or 07b-associate-service-profiles.ps1
 #>
-
-param([int]$DeployCount = 8)
 
 . "$PSScriptRoot\00-prereqs-and-connect.ps1"
 $h   = $global:UcsHandle
 $org = $global:HgOrg
 
-Write-Host "`n========== 07 – Deploy Service Profiles ==========" -ForegroundColor Cyan
+Write-Host "`n========== 07 – Create Service Profiles ==========" -ForegroundColor Cyan
 
-# Blade slot → SP name map (adjust blade numbers to match your chassis)
-$bladeMap = @(
-    @{ Sp = 'hg-esx-01'; Chassis = 1; Blade = 1 },
-    @{ Sp = 'hg-esx-02'; Chassis = 1; Blade = 2 },
-    @{ Sp = 'hg-esx-03'; Chassis = 1; Blade = 3 },
-    @{ Sp = 'hg-esx-04'; Chassis = 1; Blade = 4 },
-    @{ Sp = 'hg-esx-05'; Chassis = 1; Blade = 5 },
-    @{ Sp = 'hg-esx-06'; Chassis = 1; Blade = 6 },
-    @{ Sp = 'hg-esx-07'; Chassis = 1; Blade = 7 },
-    @{ Sp = 'hg-esx-08'; Chassis = 1; Blade = 8 }
+# ── VCF role labels (informational only — not written to UCSM) ──────────────
+$spDefs = @(
+    @{ Name = 'hg-esx-01'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-02'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-03'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-04'; Role = 'Management Domain' },
+    @{ Name = 'hg-esx-05'; Role = 'VI Workload Domain' },
+    @{ Name = 'hg-esx-06'; Role = 'VI Workload Domain' },
+    @{ Name = 'hg-esx-07'; Role = 'VI Workload Domain' },
+    @{ Name = 'hg-esx-08'; Role = 'VI Workload Domain' }
 )
 
-for ($i = 0; $i -lt $DeployCount; $i++) {
-    $bm = $bladeMap[$i]
-    Write-Host "`n[SP] $($bm.Sp)  →  chassis-$($bm.Chassis)/blade-$($bm.Blade)"
+Write-Host "`n  Template  : hg-esx-template (updating-template)"
+Write-Host "  Org       : $($org.Dn)"
+Write-Host "  Profiles  : $($spDefs.Count) (unassociated)`n"
 
-    # Derive SP from template
+foreach ($def in $spDefs) {
+    Write-Host "[SP] $($def.Name)  ($($def.Role))"
+
     $sp = Add-UcsServiceProfile -Org $org -Ucs $h `
-        -Name    $bm.Sp `
+        -Name         $def.Name `
         -SrcTemplName 'hg-esx-template' `
-        -Type    'instance' `
+        -Type         'instance' `
         -ModifyPresent
 
-    # Associate to blade
-    $blade = Get-UcsBlade -Ucs $h -ChassisId $bm.Chassis -ServerId $bm.Blade
-    if (-not $blade) {
-        Write-Warning "  Blade chassis-$($bm.Chassis)/blade-$($bm.Blade) not found — skipping association"
-        continue
+    if ($sp) {
+        Write-Host "  [OK]   $($def.Name)  created/verified  assocState=$($sp.AssocState)" -ForegroundColor Green
+    } else {
+        Write-Warning "  $($def.Name) — Add-UcsServiceProfile returned null; check UCSM for errors"
     }
-    if ($blade.AssocState -ne 'unassociated') {
-        Write-Warning "  Blade $($blade.Dn) assocState=$($blade.AssocState) — skipping"
-        continue
-    }
-
-    Add-UcsLsBinding -ServiceProfile $sp -Ucs $h `
-        -PnDn $blade.Dn | Out-Null
-
-    Write-Host "  [OK]   $($bm.Sp) associated to $($blade.Dn)" -ForegroundColor Green
 }
 
-Write-Host "`n[DONE] Section 07 – Service Profiles deployed.`n" -ForegroundColor Green
-Write-Host "       Monitor association progress:" -ForegroundColor DarkGray
-Write-Host "       Get-UcsServiceProfile -Ucs `$global:UcsHandle | Where-Object { `$_.Dn -like '*HumbledGeeks*' } | Select Name,AssocState,OperState" -ForegroundColor DarkGray
+# ── Summary ───────────────────────────────────────────────────────────────
+Write-Host "`n--- Service Profile Summary ---" -ForegroundColor Yellow
+Get-UcsServiceProfile -Ucs $h | Where-Object { $_.Dn -like "*$($org.Name)*" } |
+    Select-Object Name, Type, SrcTemplName, AssocState, OperState |
+    Format-Table -AutoSize
+
+Write-Host "[DONE] Section 07 – 8 service profiles created (unassociated).`n" -ForegroundColor Green
+Write-Host "       Next steps:" -ForegroundColor DarkGray
+Write-Host "       1. Associate blades via UCSM GUI  OR  run 07b-associate-service-profiles.ps1" -ForegroundColor DarkGray
+Write-Host "       2. Acknowledge any user-ack pending-changes in UCSM after association" -ForegroundColor DarkGray
+Write-Host "       3. Run 08-verify.ps1 to confirm pool utilisation and SP states" -ForegroundColor DarkGray

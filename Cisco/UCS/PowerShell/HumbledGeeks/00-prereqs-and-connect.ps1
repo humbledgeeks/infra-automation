@@ -18,16 +18,30 @@ $OrgName    = 'HumbledGeeks'
 $OrgDN      = "org-root/org-$OrgName"
 
 # ── Module check ─────────────────────────────────────────────────────────
-if (-not (Get-Module -ListAvailable -Name 'Cisco.UCS')) {
-    Write-Host '[INFO] Cisco.UCS module not found. Installing from PSGallery...' -ForegroundColor Cyan
-    Install-Module -Name 'Cisco.UCS' -Scope CurrentUser -Force -AllowClobber
+# PSGallery publishes the UCS PowerTool suite as three modules:
+#   Cisco.UCS.Common   – shared types and utilities
+#   Cisco.UCS.Core     – core Ucs session objects
+#   Cisco.UCSManager   – UCS Manager cmdlets (Connect-Ucs, Add-UcsServiceProfile, etc.)
+$requiredModules = @('Cisco.UCS.Common', 'Cisco.UCS.Core', 'Cisco.UCSManager')
+foreach ($mod in $requiredModules) {
+    if (-not (Get-Module -ListAvailable -Name $mod)) {
+        Write-Host "[INFO] Installing $mod from PSGallery..." -ForegroundColor Cyan
+        Install-Module -Name $mod -Scope CurrentUser -Force -AllowClobber -AcceptLicense -Repository PSGallery
+    }
+    Import-Module $mod -ErrorAction Stop
 }
-Import-Module Cisco.UCS -ErrorAction Stop
-Write-Host "[OK]   Cisco.UCS module loaded  ($(Get-Module Cisco.UCS | Select-Object -ExpandProperty Version))" -ForegroundColor Green
+Write-Host "[OK]   Cisco UCS modules loaded  (UCSManager $(Get-Module Cisco.UCSManager | Select-Object -ExpandProperty Version))" -ForegroundColor Green
 
 # ── Connect ────────────────────────────────────────────────────────────────
 if (-not $global:DefaultUcs) {
-    $cred = Get-Credential -UserName 'admin' -Message "Enter UCSM credentials for $UCSMHost"
+    # Non-interactive: set $env:UCSM_PASSWORD before running, or fall back to Get-Credential
+    if ($env:UCSM_PASSWORD) {
+        $secPwd = ConvertTo-SecureString $env:UCSM_PASSWORD -AsPlainText -Force
+        $cred   = New-Object System.Management.Automation.PSCredential('admin', $secPwd)
+        Write-Host "[INFO] Using UCSM_PASSWORD env var for authentication" -ForegroundColor DarkGray
+    } else {
+        $cred = Get-Credential -UserName 'admin' -Message "Enter UCSM credentials for $UCSMHost"
+    }
     $global:UcsHandle = Connect-Ucs -Name $UCSMHost -Credential $cred -NotDefault
     Write-Host "[OK]   Connected to UCSM $UCSMHost" -ForegroundColor Green
 } else {
