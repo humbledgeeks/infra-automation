@@ -46,11 +46,27 @@ The companion blog post is **LIVE** on HumbledGeeks.com:
 - Blog post title corrected and synced in this repo and in `zero-to-vcap`
 - All 29 blog post images fixed via WP REST API (proper media IDs assigned)
 - Syntax highlighting fixed permanently via `astra-child/functions.php` (Prism.js loaded site-wide)
+- **`08-cleanup-fc-6224.ps1`** added — removes all FC/vHBA config from 6224 FI (no 16 Gb FC SFP support)
+- **`07b-associate-service-profiles.ps1`** blade lookup and availability check bugs fixed
+- **FC cleanup COMPLETE**: vHBAs removed from SP template, `hg-san-con` SAN Connectivity Policy deleted via XML API. All 9 SPs (template + 8 instances) verified clean — zero vHBAs. WWPN/WWNN pool definitions preserved in script files for 6332 redeploy.
+- **Blades ready for association** — run `07b-associate-service-profiles.ps1`, then acknowledge user-ack pending changes in UCSM.
+
+### Current State (end of session 2026-03-19)
+
+| Item | State |
+|------|-------|
+| 6224 FI FC config | ✅ Fully removed |
+| All 9 service profiles | ✅ vHBA-free, unassociated |
+| Blade association | ⏳ Pending — run `07b-associate-service-profiles.ps1` |
+| FI 6332 arrival | ⏳ Expected next week |
+| FC re-enablement | ⏳ After 6332 arrives — re-run `05`, `06`, `07b` |
 
 ### What's Next
 
-- Continue expanding the FlexPod automation suite (additional validation scripts, Ansible playbooks)
-- Any new infrastructure blog posts will have companion scripts added here under the appropriate vendor folder
+1. Run `07b-associate-service-profiles.ps1` to bind the 8 SPs to chassis-1 blades 1–8
+2. Acknowledge user-ack pending changes in UCSM per blade (Service Profiles → [SP] → Pending Changes → Acknowledge)
+3. When FI 6332 arrives: re-run `05-vhba-templates.ps1`, `06-service-profile-template.ps1`, `07b` to restore FC
+4. Continue expanding FlexPod automation suite (validation scripts, Ansible playbooks)
 - Cross-repo companion: `zero-to-vcap/blog-posts/flexpod-vcf-ucs-foundation.md`
 
 The purpose of the AI assistant is to support engineers by providing technically accurate guidance, architectural insight, automation strategies, and operational best practices across modern infrastructure platforms.

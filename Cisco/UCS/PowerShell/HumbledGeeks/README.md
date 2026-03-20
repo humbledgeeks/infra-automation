@@ -24,19 +24,28 @@ all-flash array.
 | `04-vnic-templates.ps1` | 6× Ethernet vNIC Updating Templates — all MTU 1500 |
 | `05-vhba-templates.ps1` | 2× FC vHBA Updating Templates (path to ASA A30) |
 | `06-service-profile-template.ps1` | hg-esx-template SP template + all bindings |
-| `07-deploy-service-profiles.ps1` | Derive SPs from template + associate to blades |
-| `08-verify.ps1` | Post-deployment verification report |
+| `07-deploy-service-profiles.ps1` | Create 8 SPs from template (unassociated) |
+| `07b-associate-service-profiles.ps1` | Bind SPs to physical blades (run after ASA A30 cabled + FC zoning done) |
+| `09-fc-zoning.ps1` | Pre-build 16 single-initiator FC zones; `-Enable` flag activates them |
+| `10-verify.ps1` | Post-deployment verification report |
 
 ## Quick Start
 
 ```powershell
-# Full deployment (sections 01–07 in order)
+# Full UCS foundation (steps 01–07 in order)
 foreach ($s in 1..7) {
     & "$PSScriptRoot\0$s-*.ps1"
 }
 
+# Pre-build FC zones (safe to run before ASA A30 is cabled)
+& "$PSScriptRoot\09-fc-zoning.ps1"
+
 # Verification only
-& "$PSScriptRoot\08-verify.ps1"
+& "$PSScriptRoot\10-verify.ps1"
+
+# After ASA A30 is cabled and FC zones are enabled, associate blades:
+# & "$PSScriptRoot\09-fc-zoning.ps1" -Enable
+# & "$PSScriptRoot\07b-associate-service-profiles.ps1"
 ```
 
 ## Network Design
@@ -114,10 +123,11 @@ Two settings require raw XML API calls via `Invoke-UcsXml` — handled automatic
 
 ## Next Steps (VCF Deployment)
 
-1. **FC Zoning** — Zone ESXi initiator WWPNs to ASA A30 target ports per fabric
-2. **ESXi staging** — Mount ISO to virtual KVM DVD or configure PXE on dc3-mgmt (VLAN 16)
-3. **Associate SPs** — Run `07-deploy-service-profiles.ps1`; acknowledge user-ack pending changes
-4. **VCF bringup** — Use SDDC Manager cloud builder; KVM IPs from `hg-ext-mgmt` become host management IPs
+1. **Cable ASA A30** — FI-A ports 29–32 and FI-B ports 29–32 for dual-fabric FC
+2. **Enable FC Zoning** — Run `09-fc-zoning.ps1 -Enable`; zones activate on both FIs
+3. **Associate SPs** — Run `07b-associate-service-profiles.ps1`; acknowledge user-ack pending changes per blade
+4. **ESXi staging** — Mount ISO to virtual KVM DVD or configure PXE on dc3-mgmt (VLAN 16)
+5. **VCF bringup** — Use SDDC Manager cloud builder; KVM IPs from `hg-ext-mgmt` become host management IPs
 
 ## Mixed Blade Generations Note
 
