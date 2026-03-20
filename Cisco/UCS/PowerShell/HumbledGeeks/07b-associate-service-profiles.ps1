@@ -71,13 +71,15 @@ for ($i = 0; $i -lt $DeployCount; $i++) {
     }
 
     # Retrieve the physical blade
-    $blade = Get-UcsBlade -Ucs $h -ChassisId $bm.Chassis -ServerId $bm.Blade
+    # Filter via Where-Object — ChassisId/ServerId params don't reliably filter
+    # on non-default UCS session handles; SlotId is the correct property name.
+    $blade = Get-UcsBlade -Ucs $h | Where-Object { $_.ChassisId -eq $bm.Chassis -and $_.SlotId -eq $bm.Blade } | Select-Object -First 1
     if (-not $blade) {
         Write-Warning "  Blade chassis-$($bm.Chassis)/blade-$($bm.Blade) not found — check discovery"
         continue
     }
-    if ($blade.AssocState -ne 'unassociated') {
-        Write-Warning "  Blade $($blade.Dn) assocState=$($blade.AssocState) — cannot associate"
+    if ($blade.Availability -ne 'available') {
+        Write-Warning "  Blade $($blade.Dn) availability=$($blade.Availability) — cannot associate"
         continue
     }
 
