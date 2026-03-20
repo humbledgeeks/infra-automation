@@ -63,13 +63,13 @@ Write-Host "  [OK]   hg-qos-be" -ForegroundColor Green
 Write-Host "`n[POLICY] hg-local-disk"
 $ldp = Add-UcsLocalDiskConfigPolicy -Org $org -Ucs $h `
     -Name              'hg-local-disk' `
-    -Descr             'HumbledGeeks — any-config, FlexFlash enabled for SD card boot' `
+    -Descr             'HumbledGeeks — any-config (B200-M4/M5, no FlexFlash hardware)' `
     -Mode              'any-configuration' `
-    -FlexFlashState    'enable' `
-    -FlexFlashRAIDReportingState 'enable' `
+    -FlexFlashState    'disable' `
+    -FlexFlashRAIDReportingState 'disable' `
     -ProtectConfig     'yes' `
     -ModifyPresent
-Write-Host "  [OK]   hg-local-disk (mode=any-configuration, FlexFlash=enabled)" -ForegroundColor Green
+Write-Host "  [OK]   hg-local-disk (mode=any-configuration, FlexFlash=disabled)" -ForegroundColor Green
 
 # ── Power Policy ──────────────────────────────────────────────────────────
 Write-Host "`n[POLICY] hg-power"
@@ -91,31 +91,22 @@ $maint = Add-UcsMaintenancePolicy -Org $org -Ucs $h `
     -ModifyPresent
 Write-Host "  [OK]   hg-maint (uptimeDisr=user-ack, dataDisr=user-ack)" -ForegroundColor Green
 
-# ── Boot Policy (UEFI: DVD → SSD → FlexFlash SD) ──────────────────────────
+# ── Boot Policy (Legacy: DVD only) ────────────────────────────────────────
+# NOTE: B200-M4 blades do not have FlexFlash hardware and require legacy boot mode.
+#       Boot order is DVD/KVM virtual media only — ESXi is installed via KVM ISO.
+#       When FI 6332 arrives and SAN boot is configured, add an FC SAN boot entry here.
 Write-Host "`n[POLICY] hg-flexflash (Boot Policy)"
 $boot = Add-UcsBootPolicy -Org $org -Ucs $h `
     -Name          'hg-flexflash' `
-    -Descr         'UEFI: DVD(1) SSD(2) FlexFlash SD(3)' `
-    -BootMode      'uefi' `
+    -Descr         'Legacy: DVD/KVM (1) — B200-M4 compatible, no FlexFlash' `
+    -BootMode      'legacy' `
     -EnforceVnicName 'yes' `
     -RebootOnUpdate  'no' `
     -ModifyPresent
-# Order 1: DVD (read-only virtual media)
+# Order 1: DVD/KVM (read-only virtual media — mount ESXi ISO here)
 Add-UcsLsBootVirtualMedia -BootPolicy $boot -Ucs $h `
     -Access 'read-only' -Order 1 -ModifyPresent | Out-Null
-# Order 2: SSD (embedded local disk)
-$stor2 = Add-UcsLsBootStorage -BootPolicy $boot -Ucs $h `
-    -Order 2 -ModifyPresent
-$ls2   = Add-UcsLsBootLocalStorage -LsBootStorage $stor2 -Ucs $h -ModifyPresent
-Add-UcsLsBootEmbeddedLocalDiskImage -LsBootLocalStorage $ls2 -Ucs $h `
-    -Order 2 -ModifyPresent | Out-Null
-# Order 3: FlexFlash SD card
-$stor3 = Add-UcsLsBootStorage -BootPolicy $boot -Ucs $h `
-    -Order 3 -ModifyPresent
-$ls3   = Add-UcsLsBootLocalStorage -LsBootStorage $stor3 -Ucs $h -ModifyPresent
-Add-UcsLsBootUsbFlashStorageImage -LsBootLocalStorage $ls3 -Ucs $h `
-    -Order 3 -ModifyPresent | Out-Null
-Write-Host "  [OK]   hg-flexflash: UEFI DVD(1) SSD(2) FlexFlash(3)" -ForegroundColor Green
+Write-Host "  [OK]   hg-flexflash: Legacy DVD/KVM(1)" -ForegroundColor Green
 
 # ── BIOS Policy (VMware optimised) ────────────────────────────────────────
 Write-Host "`n[POLICY] hg-bios"
