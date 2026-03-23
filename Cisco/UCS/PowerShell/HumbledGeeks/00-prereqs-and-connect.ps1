@@ -33,20 +33,49 @@ foreach ($mod in $requiredModules) {
 Write-Host "[OK]   Cisco UCS modules loaded  (UCSManager $(Get-Module Cisco.UCSManager | Select-Object -ExpandProperty Version))" -ForegroundColor Green
 
 # ── Connect ────────────────────────────────────────────────────────────────
-if (-not $global:DefaultUcs) {
-    # Non-interactive: set $env:UCSM_PASSWORD before running, or fall back to Get-Credential
-    if ($env:UCSM_PASSWORD) {
-        $secPwd = ConvertTo-SecureString $env:UCSM_PASSWORD -AsPlainText -Force
-        $cred   = New-Object System.Management.Automation.PSCredential('admin', $secPwd)
-        Write-Host "[INFO] Using UCSM_PASSWORD env var for authentication" -ForegroundColor DarkGray
-    } else {
-        $cred = Get-Credential -UserName 'admin' -Message "Enter UCSM credentials for $UCSMHost"
-    }
-    $global:UcsHandle = Connect-Ucs -Name $UCSMHost -Credential $cred -NotDefault
-    Write-Host "[OK]   Connected to UCSM $UCSMHost" -ForegroundColor Green
+# Build credential once
+if ($env:UCSM_PASSWORD) {
+    $secPwd = ConvertTo-SecureString $env:UCSM_PASSWORD -AsPlainText -Force
+    $cred   = New-Object System.Management.Automation.PSCredential('admin', $secPwd)
+    Write-Host "[INFO] Using UCSM_PASSWORD env var for authentication" -ForegroundColor DarkGray
 } else {
-    Write-Host "[OK]   Reusing existing UCSM session" -ForegroundColor Green
-    $global:UcsHandle = $global:DefaultUcs
+    $cred = Get-Credential -UserName 'admin' -Message "Enter UCSM credentials for $UCSMHost"
+}
+
+# Retry loop — handles "maximum session limit" (error 572) by waiting for idle sessions
+# to expire (UCSM default idle timeout is 600 s).  Retries every 20 s, up to 10 times.
+$maxRetries = 10
+$retryDelay = 20
+$global:UcsHandle = $null
+
+for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+    try {
+        # Use -NotDefault so we hold an explicit handle; always disconnect on exit via
+        # the Disconnect-UcsSession helper defined below.
+        $global:UcsHandle = Connect-Ucs -Name $UCSMHost -Credential $cred -NotDefault -ErrorAction Stop
+        Write-Host "[OK]   Connected to UCSM $UCSMHost" -ForegroundColor Green
+        break
+    } catch {
+        if ($_.Exception.Message -match '572|maximum session') {
+            Write-Warning "[WARN] UCSM session limit hit (attempt $attempt/$maxRetries). Waiting ${retryDelay}s for idle sessions to expire..."
+            Start-Sleep -Seconds $retryDelay
+        } else {
+            throw  # Re-throw unexpected errors immediately
+        }
+    }
+}
+
+if (-not $global:UcsHandle) {
+    throw "Failed to connect to UCSM $UCSMHost after $maxRetries attempts. Check session limit in UCSM Admin → Sessions."
+}
+
+# ── Cleanup helper — call at the end of every script ──────────────────────
+function global:Disconnect-UcsSession {
+    if ($global:UcsHandle) {
+        try { Disconnect-Ucs -Ucs $global:UcsHandle -ErrorAction SilentlyContinue } catch {}
+        $global:UcsHandle = $null
+        Write-Host "[OK]   UCSM session closed." -ForegroundColor DarkGray
+    }
 }
 
 # ── Verify org exists ─────────────────────────────────────────────────────
